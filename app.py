@@ -42,9 +42,9 @@ def cleanup_files(*paths):
 # 1. TikTok Optimized Patcher (3 Streams - HEVC + Double Audio)
 # =====================================================================
 # =====================================================================
-# TikTok Instant Patcher - 100% RTX Exact Match
+# TikTok Instant Patcher (يدعم H.264 و HEVC/H.265 بنسخ مباشر 100%)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (100% RTX Matching)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (H.264 + HEVC Ready)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -60,20 +60,50 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # أمر الترقيع المباشر المتطابق مع RTX (نسخ الفيديو + نسخ الصوت بالكامل)
+    # 1. فحص كوديك الفيديو لتحديد نوع الفلتر المناسب تلقائياً
+    probe_cmd = [
+        "ffprobe", "-v", "quiet",
+        "-print_format", "json",
+        "-show_streams",
+        input_path
+    ]
+
+    codec_name = "h264"
+    try:
+        probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        probe_data = json.loads(probe_res.stdout)
+        video_stream = next((s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video'), {})
+        codec_name = video_stream.get('codec_name', 'h264').lower()
+    except Exception:
+        pass
+
+    # 2. تحديد الفلتر المتوافق بدقة
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
         "-map", "0",
-        "-c", "copy",                     # نسخ جميع مسارات الفيديو والصوت كما هي بالضبط
-        "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1",
-        "-brand", "mp41",                 # نفس نوع الـ Container لملف RTX
+        "-c", "copy"
+    ]
+
+    if "hevc" in codec_name or "h265" in codec_name:
+        # فلتر مخصص لفيديوهات HEVC (H.265)
+        cmd.extend([
+            "-bsf:v", "hevc_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1"
+        ])
+    elif "h264" in codec_name or "avc" in codec_name:
+        # فلتر مخصص لفيديوهات H.264
+        cmd.extend([
+            "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1"
+        ])
+
+    cmd.extend([
+        "-brand", "mp41",
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
-        "-movflags", "+faststart",        # وضع ترويسة Moov Atom في المقدمة
+        "-movflags", "+faststart",
         output_path
-    ]
+    ])
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
