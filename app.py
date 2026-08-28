@@ -62,30 +62,30 @@ async def enhance_video(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # إعداد الفلاتر مع تحسين استهلاك الذاكرة لدقة 4K
-    filters = [
-        f"scale=-2:{target_height}:flags=lanczos",
-        "unsharp=5:5:0.6:5:5:0.0"
-    ]
+    # الترتيب الأمثل لمنع انهيار الذاكرة:
+    # 1. تطبيق Blur على الحجم الأصلي
+    # 2. توليد الفريمات على الحجم الأصلي (خفيف جداً على الـ RAM)
+    # 3. رفع الأبعاد إلى 4K كآخر خطوة
+    filters = []
 
     if enable_blur and blur_amount > 1:
         weights = " ".join(["1"] * blur_amount)
         filters.append(f"tmix=frames={blur_amount}:weights='{weights}'")
 
     filters.append(f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100")
-    vf_filter = ",".join(filters)
+    filters.append(f"scale=-2:{target_height}:flags=bilinear")
+    filters.append("unsharp=5:5:0.6:5:5:0.0")
 
-    # ضبط preset سريع لتفادي تجاوز الذاكرة في دقة 4K
-    preset_choice = "ultrafast" if target_height >= 2160 else "fast"
+    vf_filter = ",".join(filters)
 
     cmd = [
         "ffmpeg", "-y",
-        "-threads", "0",
+        "-threads", "2",           # تقييد الخيوط لتجنب استهلاك RAM مفرط في 4K
         "-i", input_path,
         "-vf", vf_filter,
         "-c:v", "libx264",
-        "-preset", preset_choice,
-        "-crf", "18",
+        "-preset", "ultrafast",
+        "-crf", "20",
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
         output_path
@@ -96,8 +96,7 @@ async def enhance_video(
     except subprocess.CalledProcessError as e:
         cleanup_files(input_path, output_path)
         err = e.stderr.decode("utf-8", errors="ignore")
-        # استخراج آخر أسطر لمعرفة السبب الفعلي
-        last_lines = "\n".join(err.strip().splitlines()[-4:])
+        last_lines = "\n".join(err.strip().splitlines()[-5:])
         raise HTTPException(status_code=500, detail=f"خطأ المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
