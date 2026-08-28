@@ -40,9 +40,9 @@ def cleanup_files(*paths):
                 pass
 
 # =====================================================================
-# TikTok Universal Optimized Patcher - Powered by ALSHKA IQ
+# TikTok Optimized Patcher - ALSHKA IQ Ultra Engine
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Strict Native Patcher")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Optimized Patcher (ALSHKA IQ)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -57,37 +57,69 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # تطبيق نفس بنية RTX تماماً مع حقوق ALSHKA IQ
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
         "-map", "0:v:0",
         "-map", "0:a:0?",
         "-c:v", "copy",
+        "-tag:v", "hvc1",
         "-c:a", "copy",
         "-brand", "isom",
+        "-metadata", "major_brand=isom",
+        "-metadata", "minor_version=512",
+        "-metadata", "compatible_brands=isomiso2mp41",
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
-        "-metadata", "comment=Patched by ALSHKA IQ",
-        "-metadata:s:v:0", "handler_name=ALSHKA Video Engine",
-        "-metadata:s:a:0", "handler_name=ALSHKA Audio Engine",
+        "-metadata", "encoder=ALSHKA IQ Optimizer Engine v1.0",
+        "-metadata", "comment=Protected content: Optimized and patched by ALSHKA IQ",
+        "-metadata:s:v:0", "handler_name=VideoHandler",
+        "-metadata:s:a:0", "handler_name=SoundHandler",
         "-movflags", "+faststart",
         output_path
     ]
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError as e:
-        cleanup_files(input_path, output_path)
-        err = e.stderr.decode("utf-8", errors="ignore")
-        last_lines = "\n".join(err.strip().splitlines()[-4:])
-        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
+    except subprocess.CalledProcessError:
+        # مسار احتياطي يعالج الصوت إلى AAC في حال عدم توافق المسار الصوتي الأصلي
+        fallback_cmd = [
+            "ffmpeg", "-y",
+            "-i", input_path,
+            "-map", "0:v:0",
+            "-map", "0:a:0?",
+            "-c:v", "copy",
+            "-tag:v", "hvc1",
+            "-c:a", "aac",
+            "-b:a", "48k",
+            "-brand", "isom",
+            "-metadata", "major_brand=isom",
+            "-metadata", "minor_version=512",
+            "-metadata", "compatible_brands=isomiso2mp41",
+            "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
+            "-metadata", "artist=ALSHKA IQ",
+            "-metadata", "encoder=ALSHKA IQ Optimizer Engine v1.0",
+            "-metadata", "comment=Protected content: Optimized and patched by ALSHKA IQ",
+            "-metadata:s:v:0", "handler_name=VideoHandler",
+            "-metadata:s:a:0", "handler_name=SoundHandler",
+            "-movflags", "+faststart",
+            output_path
+        ]
+        try:
+            subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        except subprocess.CalledProcessError as e:
+            cleanup_files(input_path, output_path)
+            err = e.stderr.decode("utf-8", errors="ignore")
+            last_lines = "\n".join(err.strip().splitlines()[-4:])
+            raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"ALSHKA_IQ_Optimized_{file.filename}"
+        filename=f"alshka-optimized-{task_id[:4]}.mp4"
     )
 # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth High FPS)
