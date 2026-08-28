@@ -38,7 +38,7 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="1. TikTok Patcher (فائق السرعة - بدون Timeout)")
+@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="TikTok Patcher (نفس الحجم 100% وبدون إعادة ضغط)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -54,32 +54,33 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # معالجة فورية (تعديل Bitstream + FastStart + تسوية SAR) مع تشفير فائق الخفة
+    # 1. -c copy: لا يعيد تشفير الفيديو ولا يغير بكسل واحد ولا يغير الحجم
+    # 2. h264_metadata: تعديل الـ Flag البرمجي للألوان لخداع خوارزمية تيك توك
+    # 3. +faststart: ترتيب حزم الميتا داتا للتوافق الكامل مع خوادم تيك توك
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
-        "-map", "0:v:0",
-        "-map", "0:a?",
-        "-c:v", "libx264",
-        "-preset", "veryfast",           # ضغط ممتاز وسرعة معالجة عالية
-        "-crf", "20",                    # توازن مثالي بين النقاء وحجم الملف
-        "-maxrate", "8M",                # سقف 8 ميغابت/ثانية (مثالي جداً لعدم تدخل تيك توك)
-        "-bufsize", "12M",
-        "-pix_fmt", "yuv420p",
-        "-bsf:v", "h264_metadata=video_full_range_flag=0",
-        "-c:a", "aac",
-        "-b:a", "128k",
+        "-map", "0",
+        "-c:v", "copy",
+        "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1",
+        "-c:a", "copy",
         "-movflags", "+faststart",
         output_path
-    ] 
+    ]
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError as e:
-        cleanup_files(input_path, output_path)
-        err_output = e.stderr.decode("utf-8", errors="ignore")
-        last_lines = "\n".join(err_output.strip().splitlines()[-4:])
-        raise HTTPException(status_code=500, detail=f"تفاصيل الخطأ: {last_lines}")
+    except subprocess.CalledProcessError:
+        # إذا كان الفيديو بترميز آخر غير H264 (مثل HEVC)، يتم تطبيق FastStart المباشر
+        fallback_cmd = [
+            "ffmpeg", "-y",
+            "-i", input_path,
+            "-map", "0",
+            "-c", "copy",
+            "-movflags", "+faststart",
+            output_path
+        ]
+        subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
