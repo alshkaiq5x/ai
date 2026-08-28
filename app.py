@@ -5,96 +5,67 @@ import shutil
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
-app = FastAPI(title="AI Video Upscaler (Real-ESRGAN) + 60FPS")
+app = FastAPI(title="Video Upscaler & 60FPS Enhancer")
 
-BASE_DIR = "/tmp/processing"
-os.makedirs(BASE_DIR, exist_ok=True)
+UPLOAD_DIR = "/tmp/uploads"
+OUTPUT_DIR = "/tmp/outputs"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-def cleanup_directory(path: str):
-    if os.path.exists(path):
-        try:
-            shutil.rmtree(path)
-        except Exception:
-            pass
+def cleanup_files(*paths):
+    for p in paths:
+        if os.path.exists(p):
+            try:
+                os.remove(p)
+            except Exception:
+                pass
 
-@app.post("/enhance-ai")
-async def enhance_ai_video(
+@app.post("/enhance")
+async def enhance_video(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     target_fps: int = 60,
-    model_name: str = "realesr-animevideov3",
-    upscale_ratio: int = 2
+    target_height: int = 1080
 ):
-    # التحقق من الامتداد
     if not file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
         raise HTTPException(status_code=400, detail="صيغة الفيديو غير مدعومة")
 
     task_id = str(uuid.uuid4())
-    task_dir = os.path.join(BASE_DIR, task_id)
-    frames_in = os.path.join(task_dir, "frames_in")
-    frames_out = os.path.join(task_dir, "frames_out")
-    
-    os.makedirs(frames_in, exist_ok=True)
-    os.makedirs(frames_out, exist_ok=True)
-
-    input_video = os.path.join(task_dir, "input.mp4")
-    output_video = os.path.join(task_dir, f"ai_enhanced_60fps_{file.filename}")
+    input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
+    output_path = os.path.join(OUTPUT_DIR, f"{task_id}_out.mp4")
 
     # حفظ الفيديو المرفوع
-    with open(input_video, "wb") as buffer:
+    with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # فلتر رفع الدقة المتقدم (Lanczos) + توليد 60 إطار بنعومة فائقة (Optical Flow)
+    vf_filter = (
+        f"scale=-2:{target_height}:flags=lanczos,"
+        f"minterpolate=fps={target_fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", input_path,
+        "-vf", vf_filter,
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "20",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        output_path
+    ]
+
     try:
-        # قراءة معدل الإطارات الأصلي
-        fps_probe = subprocess.run(
-            ["ffprobe", "-v", "0", "-of", "csv=p=0", "-select_streams", "v:0", "-show_entries", "stream=r_frame_rate", input_video],
-            capture_output=True, text=True, check=True
-        )
-        original_fps = fps_probe.stdout.strip()
-
-        # تفكيك الفيديو إلى إطارات
-        subprocess.run([
-            "ffmpeg", "-y", "-i", input_video,
-            "-qscale:v", "2",
-            os.path.join(frames_in, "frame_%08d.png")
-        ], check=True)
-
-        # رفع الدقة بالذكاء الاصطناعي
-        subprocess.run([
-            "realesrgan-ncnn-vulkan",
-            "-i", frames_in,
-            "-o", frames_out,
-            "-n", model_name,
-            "-s", str(upscale_ratio),
-            "-f", "png"
-        ], check=True)
-
-        # رفع الفريمات إلى 60 عبر التدفق البصري ودمج الصوت
-        vf_filter = f"minterpolate=fps={target_fps}:mi_mode=mci:mc_mode=aobmc:me_mode=bidir:vsbmc=1"
-        
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-framerate", original_fps,
-            "-i", os.path.join(frames_out, "frame_%08d.png"),
-            "-i", input_video,
-            "-vf", vf_filter,
-            "-map", "0:v:0",
-            "-map", "1:a:0?",
-            "-c:v", "libx264",
-            "-crf", "18",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "copy",
-            output_video
-        ], check=True)
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
-        cleanup_directory(task_dir)
-        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {e.stderr if hasattr(e, 'stderr') else str(e)}")
+        cleanup_files(input_path, output_path)
+        raise HTTPException(status_code=500, detail=f"خطأ في المعالجة: {e.stderr.decode('utf-8', errors='ignore')[:300]}")
 
-    # تنظيف المجلد المؤقت بعد انتهاء التحميل
-    background_tasks.add_task(cleanup_directory, task_dir)
+    background_tasks.add_task(cleanup_files, input_path, output_path)
 
     return FileResponse(
-        path=output_video,
+        path=output_path,
         media_type="video/mp4",
-        filename=f"ai_60fps_{file.filename}"
+        filename=f"enhanced_60fps_{file.filename}"
     )
