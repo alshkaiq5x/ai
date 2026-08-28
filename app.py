@@ -43,7 +43,10 @@ def cleanup_files(*paths):
 # =====================================================================
 # 1. الأداة الرئيسية: TikTok Universal Patcher (من 360p إلى 4K 120fps)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Universal Patcher (جميع الجودات والفريمات - ALSHKA IQ)")
+# =====================================================================
+# 1. TikTok Universal Patcher (مستقر 100% وبدون انهيار السيرفر)
+# =====================================================================
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Universal Patcher (جميع الجودات - مستقر)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -59,7 +62,7 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # فحص مواصفات الفيديو لتحديد الإعدادات المثالية ديناميكياً
+    # 1. فحص الدقة بأمان
     probe_cmd = [
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
@@ -81,39 +84,34 @@ async def tiktok_patcher(
         width = int(video_stream.get('width', 1920))
         max_dim = max(height, width)
 
-        # التخصيص التلقائي حسب الدقة من 360p إلى 4K
-        if max_dim >= 2160:       # 4K Ultra HD
-            maxrate = "20M"
-            bufsize = "40M"
+        if max_dim >= 2160:
+            maxrate = "18M"
+            bufsize = "36M"
             level_val = "5.2"
             crf_val = "18"
-        elif max_dim >= 1440:     # 2K Quad HD
-            maxrate = "12M"
-            bufsize = "24M"
+        elif max_dim >= 1440:
+            maxrate = "10M"
+            bufsize = "20M"
             level_val = "5.1"
             crf_val = "19"
-        elif max_dim >= 1080:     # 1080p Full HD
-            maxrate = "6M"
-            bufsize = "12M"
+        elif max_dim >= 1080:
+            maxrate = "5.5M"
+            bufsize = "11M"
             level_val = "4.2"
             crf_val = "20"
-        elif max_dim >= 720:      # 720p HD
-            maxrate = "3.5M"
-            bufsize = "7M"
+        else:
+            maxrate = "2.5M"
+            bufsize = "5M"
             level_val = "3.2"
-            crf_val = "21"
-        else:                     # 360p / 480p / SD
-            maxrate = "1.8M"
-            bufsize = "3.6M"
-            level_val = "3.1"
             crf_val = "22"
     except Exception:
         pass
 
-    # معالجة الفيديو بحقوق ALSHKA IQ ونظام Optimized الكامل
+    # 2. أمر FFmpeg المستقر بدون Deadlock
     cmd = [
         "ffmpeg", "-y",
-        "-threads", "2",
+        "-fflags", "+genpts",            # حل مشكلة time=N/A وتزامن البداية
+        "-threads", "1",                 # خيط واحد لتفادي استهلاك الذاكرة المفاجئ
         "-i", input_path,
         "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1",
         "-map", "0:v:0",
@@ -130,16 +128,11 @@ async def tiktok_patcher(
         "-color_primaries", "bt709",
         "-color_trc", "bt709",
         "-color_range", "tv",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-ar", "44100",
+        "-c:a", "copy",                  # نسخ الصوت الأصلي لمنع تجميد Lavc AAC
         "-brand", "mp41",
-        # حقوق ALSHKA IQ الكاملة
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
-        "-metadata:s:v:0", "handler_name=ALSHKA Video Engine",
-        "-metadata:s:a:0", "handler_name=ALSHKA Audio Engine",
         "-movflags", "+faststart",
         output_path
     ]
