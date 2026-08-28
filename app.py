@@ -39,12 +39,9 @@ def cleanup_files(*paths):
 
 
 # =====================================================================
-# 1. TikTok Optimized Patcher (3 Streams - HEVC + Double Audio)
+# TikTok Instant Patcher - 100% RTX Exact Output (9.3MB Match)
 # =====================================================================
-# =====================================================================
-# TikTok Instant Patcher (يدعم H.264 و HEVC/H.265 بنسخ مباشر 100%)
-# =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (H.264 + HEVC Ready)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (Exact 9.3MB Match)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -60,7 +57,7 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. فحص كوديك الفيديو لتحديد نوع الفلتر المناسب تلقائياً
+    # 1. فحص كوديك الفيديو والصوت
     probe_cmd = [
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
@@ -69,33 +66,43 @@ async def tiktok_patcher(
     ]
 
     codec_name = "h264"
+    has_audio = False
     try:
         probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         probe_data = json.loads(probe_res.stdout)
-        video_stream = next((s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video'), {})
+        streams = probe_data.get('streams', [])
+        video_stream = next((s for s in streams if s.get('codec_type') == 'video'), {})
         codec_name = video_stream.get('codec_name', 'h264').lower()
+        has_audio = any(s.get('codec_type') == 'audio' for s in streams)
     except Exception:
         pass
 
-    # 2. تحديد الفلتر المتوافق بدقة
+    # 2. بناء الأمر لعزل مسار فيديو واحد ومسار صوت واحد فقط مثل RTX
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
-        "-map", "0",
-        "-c", "copy"
+        "-map", "0:v:0",                 # أخذ مسار الفيديو الأساسي فقط
+        "-c:v", "copy"
     ]
 
+    # تطبيق فلتر الترويسة حسب نوع الكوديك
     if "hevc" in codec_name or "h265" in codec_name:
-        # فلتر مخصص لفيديوهات HEVC (H.265)
         cmd.extend([
             "-bsf:v", "hevc_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1"
         ])
     elif "h264" in codec_name or "avc" in codec_name:
-        # فلتر مخصص لفيديوهات H.264
         cmd.extend([
             "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1"
         ])
 
+    # إذا وجد صوت: نأخذ المسار الأول فقط (0:a:0) لمنع تضخم الحجم
+    if has_audio:
+        cmd.extend([
+            "-map", "0:a:0",
+            "-c:a", "copy"
+        ])
+
+    # إعدادات الـ Container وحقوق ALSHKA IQ
     cmd.extend([
         "-brand", "mp41",
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
