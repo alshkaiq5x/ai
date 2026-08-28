@@ -41,7 +41,7 @@ def cleanup_files(*paths):
 # =====================================================================
 # TikTok Instant Patcher - 100% Mediabunny / RTX Exact Engine
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (Exact Mediabunny / RTX Output)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (Forces Optimized Engine)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -53,11 +53,9 @@ async def tiktok_patcher(
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
     output_path = os.path.join(OUTPUT_DIR, f"{task_id}_opt.mp4")
 
-    # حفظ الفيديو المرفوع
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. فحص كوديك الفيديو والصوت
     probe_cmd = [
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
@@ -77,7 +75,7 @@ async def tiktok_patcher(
     except Exception:
         pass
 
-    # 2. بناء أمر الترقيع المطابق تماماً لـ Mediabunny و CompressBase
+    # 1. نسخ الفيديو دون مساس + ترقيع الترويسة
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
@@ -85,7 +83,6 @@ async def tiktok_patcher(
         "-c:v", "copy"
     ]
 
-    # فلتر الترويسة
     if "hevc" in codec_name or "h265" in codec_name:
         cmd.extend([
             "-bsf:v", "hevc_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1"
@@ -95,51 +92,35 @@ async def tiktok_patcher(
             "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1"
         ])
 
+    # 2. تحويل الصوت حصراً إلى AAC لتجاوز فحص تيك توك الإجباري
     if has_audio:
         cmd.extend([
             "-map", "0:a:0",
-            "-c:a", "copy"
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-ar", "44100",
+            "-ac", "2"
         ])
 
-    # مطابقة الحاوية وتفريغ وسوم FFmpeg المزعجة
+    # 3. تثبيت معايير التوافق الكاملة
     cmd.extend([
-        "-f", "mp4",
-        "-brand", "isom",                                       # مطابقة major_brand
+        "-brand", "mp41",
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
+        "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
-        "-metadata:s:v:0", "handler_name=MediabunnyVideoHandler", # نفس هاندلر الأداة
-        "-metadata:s:v:0", "encoder=Mediabunny",
-        "-movflags", "+faststart+empty_moov+default_base_moof",   # تركيبة موزع البث الفوري
+        "-metadata:s:v:0", "handler_name=ALSHKA Video Engine",
+        "-metadata:s:a:0", "handler_name=ALSHKA Audio Engine",
+        "-movflags", "+faststart",
         output_path
-    ])
+    ]
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError:
-        # مسار احتياطي عام ومستقر
-        fallback_cmd = [
-            "ffmpeg", "-y",
-            "-i", input_path,
-            "-map", "0:v:0",
-            "-c:v", "copy"
-        ]
-        if has_audio:
-            fallback_cmd.extend(["-map", "0:a:0", "-c:a", "copy"])
-        fallback_cmd.extend([
-            "-f", "mp4",
-            "-brand", "isom",
-            "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
-            "-metadata", "comment=Patched by ALSHKA IQ",
-            "-movflags", "+faststart",
-            output_path
-        ])
-        try:
-            subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        except subprocess.CalledProcessError as e:
-            cleanup_files(input_path, output_path)
-            err = e.stderr.decode("utf-8", errors="ignore")
-            last_lines = "\n".join(err.strip().splitlines()[-4:])
-            raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
+    except subprocess.CalledProcessError as e:
+        cleanup_files(input_path, output_path)
+        err = e.stderr.decode("utf-8", errors="ignore")
+        last_lines = "\n".join(err.strip().splitlines()[-4:])
+        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
