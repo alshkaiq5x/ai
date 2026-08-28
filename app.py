@@ -44,9 +44,9 @@ def cleanup_files(*paths):
 # 1. الأداة الرئيسية: TikTok Universal Patcher (من 360p إلى 4K 120fps)
 # =====================================================================
 # =====================================================================
-# 1. TikTok Universal Patcher (مستقر 100% وبدون انهيار السيرفر)
+# TikTok Universal Patcher - الإصدار المستقر والنهائي الخالي من التعليق
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Universal Patcher (جميع الجودات - مستقر)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Universal Patcher (حل نهائي ومستقر 100%)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -62,7 +62,7 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. فحص الدقة بأمان
+    # 1. فحص الصوت والفيديو عبر ffprobe لتجنب تضارب التنسيقات
     probe_cmd = [
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
@@ -70,80 +70,68 @@ async def tiktok_patcher(
         input_path
     ]
 
-    maxrate = "5M"
-    bufsize = "10M"
-    level_val = "4.2"
-    crf_val = "20"
-
+    has_audio = False
     try:
         probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         probe_data = json.loads(probe_res.stdout)
-        video_stream = next((s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video'), {})
-
-        height = int(video_stream.get('height', 1080))
-        width = int(video_stream.get('width', 1920))
-        max_dim = max(height, width)
-
-        if max_dim >= 2160:
-            maxrate = "18M"
-            bufsize = "36M"
-            level_val = "5.2"
-            crf_val = "18"
-        elif max_dim >= 1440:
-            maxrate = "10M"
-            bufsize = "20M"
-            level_val = "5.1"
-            crf_val = "19"
-        elif max_dim >= 1080:
-            maxrate = "5.5M"
-            bufsize = "11M"
-            level_val = "4.2"
-            crf_val = "20"
-        else:
-            maxrate = "2.5M"
-            bufsize = "5M"
-            level_val = "3.2"
-            crf_val = "22"
+        streams = probe_data.get('streams', [])
+        has_audio = any(s.get('codec_type') == 'audio' for s in streams)
     except Exception:
         pass
 
-    # 2. أمر FFmpeg المستقر بدون Deadlock
+    # 2. أمر الباتش الفوري (بدون استهلاك الذاكرة وبدون إعادة ضغط تشوه الفيديو)
     cmd = [
         "ffmpeg", "-y",
-        "-fflags", "+genpts",            # حل مشكلة time=N/A وتزامن البداية
-        "-threads", "1",                 # خيط واحد لتفادي استهلاك الذاكرة المفاجئ
         "-i", input_path,
-        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1",
         "-map", "0:v:0",
-        "-map", "0:a?",
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-profile:v", "high",
-        "-level:v", level_val,
-        "-crf", crf_val,
-        "-maxrate", maxrate,
-        "-bufsize", bufsize,
-        "-pix_fmt", "yuv420p",
-        "-colorspace", "bt709",
-        "-color_primaries", "bt709",
-        "-color_trc", "bt709",
-        "-color_range", "tv",
-        "-c:a", "copy",                  # نسخ الصوت الأصلي لمنع تجميد Lavc AAC
-        "-brand", "mp41",
+        "-c:v", "copy",
+        "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1",
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
-        "-movflags", "+faststart",
-        output_path
+        "-movflags", "+faststart"
     ]
+
+    # إذا كان هناك صوت، يتم تحويله إلى AAC المتوافق مع MP4 وتيك توك (يحل مشكلة صوت Opus فوراً)
+    if has_audio:
+        cmd.extend([
+            "-map", "0:a:0",
+            "-c:a", "aac",
+            "-b:a", "128k",
+            "-ar", "44100"
+        ])
+
+    cmd.append(output_path)
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError as e:
-        cleanup_files(input_path, output_path)
-        err = e.stderr.decode("utf-8", errors="ignore")
-        last_lines = "\n".join(err.strip().splitlines()[-4:])
-        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
+    except subprocess.CalledProcessError:
+        # مسار احتياطي عام في حال كان الفيديو ليس H.264
+        fallback_cmd = [
+            "ffmpeg", "-y",
+            "-i", input_path,
+            "-map", "0:v:0",
+            "-c:v", "copy",
+            "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
+            "-metadata", "artist=ALSHKA IQ",
+            "-metadata", "comment=Patched by ALSHKA IQ",
+            "-movflags", "+faststart"
+        ]
+        if has_audio:
+            fallback_cmd.extend([
+                "-map", "0:a:0",
+                "-c:a", "aac",
+                "-b:a", "128k"
+            ])
+        fallback_cmd.append(output_path)
+
+        try:
+            subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        except subprocess.CalledProcessError as e:
+            cleanup_files(input_path, output_path)
+            err = e.stderr.decode("utf-8", errors="ignore")
+            last_lines = "\n".join(err.strip().splitlines()[-4:])
+            raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
@@ -152,7 +140,6 @@ async def tiktok_patcher(
         media_type="video/mp4",
         filename=f"ALSHKA_IQ_Patched_{file.filename}"
     )
-
 
 # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth High FPS)
