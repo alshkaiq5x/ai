@@ -38,7 +38,10 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="TikTok Patcher (نفس الحجم 100% وبدون إعادة ضغط)")
+# =====================================================================
+# TikTok Optimized Patcher (تخطي ضغط تيك توك وحفظ الألوان 100% ونفس الحجم)
+# =====================================================================
+@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="TikTok Optimized Patcher")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -54,9 +57,10 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. -c copy: لا يعيد تشفير الفيديو ولا يغير بكسل واحد ولا يغير الحجم
-    # 2. h264_metadata: تعديل الـ Flag البرمجي للألوان لخداع خوارزمية تيك توك
-    # 3. +faststart: ترتيب حزم الميتا داتا للتوافق الكامل مع خوادم تيك توك
+    # تطبيق الباتش بنمط Optimized الحقيقي:
+    # 1. -c:v copy & -c:a copy: نسخ مباشر بدون إعادة ضغط (نفس الحجم، بدون بطء، معالجة في ثانية واحدة)
+    # 2. h264_metadata: إجبار تيك توك على قراءة ألوان BT.709 TV Range لمنع بهتان الألوان
+    # 3. +faststart: نقل Moov Atom للأول لبدء تشغيل الفيديو فوراً وتفادي التشفير العشوائي
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
@@ -71,7 +75,7 @@ async def tiktok_patcher(
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError:
-        # إذا كان الفيديو بترميز آخر غير H264 (مثل HEVC)، يتم تطبيق FastStart المباشر
+        # مسار احتياطي للترميزات الأخرى (مثل HEVC) لنقل الترويسة بنجاح
         fallback_cmd = [
             "ffmpeg", "-y",
             "-i", input_path,
@@ -80,14 +84,20 @@ async def tiktok_patcher(
             "-movflags", "+faststart",
             output_path
         ]
-        subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        try:
+            subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        except subprocess.CalledProcessError as e:
+            cleanup_files(input_path, output_path)
+            err = e.stderr.decode("utf-8", errors="ignore")
+            last_lines = "\n".join(err.strip().splitlines()[-4:])
+            raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"TikTok_Patched_{file.filename}"
+        filename=f"TikTok_Optimized_{file.filename}"
     )
     # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth Motion FPS)
