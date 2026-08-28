@@ -41,7 +41,10 @@ def cleanup_files(*paths):
 # =====================================================================
 # TikTok Optimized Patcher (تخطي ضغط تيك توك وحفظ الألوان 100% ونفس الحجم)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="TikTok Optimized Patcher")
+# =====================================================================
+# TikTok Optimized Patcher - Powered by ALSHKA IQ
+# =====================================================================
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Optimized Patcher (ALSHKA IQ)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -51,53 +54,59 @@ async def tiktok_patcher(
 
     task_id = str(uuid.uuid4())
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
-    output_path = os.path.join(OUTPUT_DIR, f"{task_id}_patched.mp4")
+    output_path = os.path.join(OUTPUT_DIR, f"{task_id}_opt.mp4")
 
     # حفظ الفيديو المرفوع
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # تطبيق الباتش بنمط Optimized الحقيقي:
-    # 1. -c:v copy & -c:a copy: نسخ مباشر بدون إعادة ضغط (نفس الحجم، بدون بطء، معالجة في ثانية واحدة)
-    # 2. h264_metadata: إجبار تيك توك على قراءة ألوان BT.709 TV Range لمنع بهتان الألوان
-    # 3. +faststart: نقل Moov Atom للأول لبدء تشغيل الفيديو فوراً وتفادي التشفير العشوائي
+    # معالجة الفيديو بحقوق ALSHKA IQ ونظام Optimized الكامل
     cmd = [
         "ffmpeg", "-y",
+        "-threads", "2",
         "-i", input_path,
-        "-map", "0",
-        "-c:v", "copy",
-        "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1",
-        "-c:a", "copy",
+        "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1",
+        "-map", "0:v:0",
+        "-map", "0:a?",
+        "-c:v", "libx264",
+        "-preset", "veryfast",
+        "-profile:v", "high",
+        "-level:v", "4.1",
+        "-b:v", "4150k",
+        "-maxrate", "4250k",
+        "-bufsize", "8500k",
+        "-pix_fmt", "yuv420p",
+        "-colorspace", "bt709",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-ar", "44100",
+        "-brand", "mp41",
+        # حقوق ALSHKA IQ داخل ترويسة الفيديو والمسارات (Metadata & Handlers)
+        "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
+        "-metadata", "artist=ALSHKA IQ",
+        "-metadata", "comment=Patched by ALSHKA IQ",
+        "-metadata:s:v:0", "handler_name=ALSHKA Video Engine",
+        "-metadata:s:a:0", "handler_name=ALSHKA Audio Engine",
         "-movflags", "+faststart",
         output_path
     ]
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError:
-        # مسار احتياطي للترميزات الأخرى (مثل HEVC) لنقل الترويسة بنجاح
-        fallback_cmd = [
-            "ffmpeg", "-y",
-            "-i", input_path,
-            "-map", "0",
-            "-c", "copy",
-            "-movflags", "+faststart",
-            output_path
-        ]
-        try:
-            subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        except subprocess.CalledProcessError as e:
-            cleanup_files(input_path, output_path)
-            err = e.stderr.decode("utf-8", errors="ignore")
-            last_lines = "\n".join(err.strip().splitlines()[-4:])
-            raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
+    except subprocess.CalledProcessError as e:
+        cleanup_files(input_path, output_path)
+        err = e.stderr.decode("utf-8", errors="ignore")
+        last_lines = "\n".join(err.strip().splitlines()[-4:])
+        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"TikTok_Optimized_{file.filename}"
+        filename=f"ALSHKA_IQ_Patched_{file.filename}"
     )
     # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth Motion FPS)
