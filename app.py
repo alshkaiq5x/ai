@@ -6,21 +6,19 @@ from enum import Enum
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
-app = FastAPI(title="AI Multi-Quality & Multi-FPS Video Upscaler")
+app = FastAPI(title="AI Multi-Resolution, Multi-FPS & Motion Blur Enhancer")
 
 UPLOAD_DIR = "/tmp/uploads"
 OUTPUT_DIR = "/tmp/outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# قائمة الجودات المتاحة للاختيار
 class ResolutionEnum(str, Enum):
     res_720p  = "720p (HD)"
     res_1080p = "1080p (Full HD)"
     res_2k    = "1440p (2K Quad HD)"
     res_4k    = "2160p (4K Ultra HD)"
 
-# قائمة الفريمات المتاحة للاختيار
 class FPSEnum(int, Enum):
     fps_30  = 30
     fps_60  = 60
@@ -35,17 +33,18 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-@app.post("/enhance", summary="رفع الدقة بالذكاء الاصطناعي متعدد الجودات والفريمات حتى 4K")
+@app.post("/enhance", summary="رفع الدقة حتى 4K + فريمات حتى 120fps + دعم Motion Blur")
 async def enhance_video(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     resolution: ResolutionEnum = ResolutionEnum.res_1080p,
-    fps: FPSEnum = FPSEnum.fps_60
+    fps: FPSEnum = FPSEnum.fps_60,
+    enable_blur: bool = True,       # تفعيل أو تعطيل الـ Blur
+    blur_amount: int = 3           # قوة الـ Blur (من 2 إلى 5)
 ):
     if not file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
         raise HTTPException(status_code=400, detail="صيغة الفيديو غير مدعومة")
 
-    # تحويل الاختيار إلى ارتفاع البيكسلات
     height_map = {
         ResolutionEnum.res_720p: 720,
         ResolutionEnum.res_1080p: 1080,
@@ -63,15 +62,21 @@ async def enhance_video(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # مرشحات المعالجة:
-    # 1. scale lanczos: إعادة بناء البيكسلات بدقة عالية
-    # 2. cas (Contrast Adaptive Sharpening): خوارزمية ذكاء اصطناعي لإعادة التفاصيل بدون تشويه
-    # 3. framerate: محاكاة حركة سينمائية فائقة السلاسة بمعدل الفريمات المختار
-    vf_filter = (
-        f"scale=-2:{target_height}:flags=lanczos,"
-        f"cas=0.7,"
-        f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100"
-    )
+    # بناء سلسلة الفلاتر
+    filters = [
+        f"scale=-2:{target_height}:flags=lanczos",
+        "cas=0.7"
+    ]
+
+    # إضافة فلتر الموشن بلور إذا كان مفعلاً
+    if enable_blur and blur_amount > 1:
+        weights = " ".join(["1"] * blur_amount)
+        filters.append(f"tmix=frames={blur_amount}:weights='{weights}'")
+
+    # إضافة فلتر توليد الفريمات
+    filters.append(f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100")
+
+    vf_filter = ",".join(filters)
 
     cmd = [
         "ffmpeg", "-y",
@@ -79,9 +84,9 @@ async def enhance_video(
         "-vf", vf_filter,
         "-c:v", "libx264",
         "-preset", "fast",
-        "-crf", "17",            # نقاء ألوان وتفاصيل متناهي الدقة
+        "-crf", "17",
         "-pix_fmt", "yuv420p",
-        "-c:a", "copy",          # نسخ الصوت الأصلي بدون أي ضغط
+        "-c:a", "copy",
         output_path
     ]
 
@@ -97,5 +102,5 @@ async def enhance_video(
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"AI_{target_height}p_{target_fps}fps_{file.filename}"
+        filename=f"Enhanced_{target_height}p_{target_fps}fps_{file.filename}"
     )
