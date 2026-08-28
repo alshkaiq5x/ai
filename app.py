@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import uuid
 import shutil
@@ -7,30 +8,30 @@ from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
 app = FastAPI(
-    title="Ultimate Video Suite: TikTok Patcher, AI Upscaler & Smooth FPS",
-    description="منصة شاملة لمعالجة الفيديو: تخطي ضغط تيك توك، رفع الفريمات بسلاسة، ورفع الدقة حتى 4K.",
-    version="2.0.0"
+    title="ALSHKA IQ - Universal Video Processing & TikTok Optimizer",
+    description="محرك معالجة فيديو متكامل يدعم جميع الجودات من 360p إلى 4K 120fps مع تخطي ضغط تيك توك والحفاظ على الألوان والحجم.",
+    version="6.0.0"
 )
 
+# مسارات التخزين المؤقت
 UPLOAD_DIR = "/tmp/uploads"
 OUTPUT_DIR = "/tmp/outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# خيارات الجودة
 class ResolutionEnum(str, Enum):
     res_720p  = "720p (HD)"
     res_1080p = "1080p (Full HD)"
     res_2k    = "1440p (2K Quad HD)"
     res_4k    = "2160p (4K Ultra HD)"
 
-# خيارات الفريمات
 class FPSEnum(int, Enum):
     fps_60  = 60
     fps_90  = 90
     fps_120 = 120
 
 def cleanup_files(*paths):
+    """تنظيف الملفات المؤقتة بعد انتهاء التحميل."""
     for p in paths:
         if os.path.exists(p):
             try:
@@ -38,21 +39,11 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-# =====================================================================
-# TikTok Optimized Patcher (تخطي ضغط تيك توك وحفظ الألوان 100% ونفس الحجم)
-# =====================================================================
-import os
-import json
-import subprocess
-import uuid
-import shutil
-from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
-from fastapi.responses import FileResponse
 
 # =====================================================================
-# TikTok Ultra Patcher (1080p60fps up to 4K 120fps) - ALSHKA IQ
+# 1. الأداة الرئيسية: TikTok Universal Patcher (من 360p إلى 4K 120fps)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Patcher (1080p60fps -> 4K 120fps Ready)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Universal Patcher (جميع الجودات والفريمات - ALSHKA IQ)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -68,38 +59,58 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. استخراج معلومات الفيديو لتحديد الدقة والفريمات
+    # فحص مواصفات الفيديو لتحديد الإعدادات المثالية ديناميكياً
     probe_cmd = [
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
         "-show_streams",
         input_path
     ]
-    
-    maxrate = "8M"
-    bufsize = "16M"
+
+    maxrate = "5M"
+    bufsize = "10M"
+    level_val = "4.2"
+    crf_val = "20"
+
     try:
         probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         probe_data = json.loads(probe_res.stdout)
         video_stream = next((s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video'), {})
-        
+
         height = int(video_stream.get('height', 1080))
         width = int(video_stream.get('width', 1920))
-        
-        # ضبط البتريت بناءً على الدقة العالية (2K أو 4K)
-        if height >= 2160 or width >= 2160:      # 4K UHD
+        max_dim = max(height, width)
+
+        # التخصيص التلقائي حسب الدقة من 360p إلى 4K
+        if max_dim >= 2160:       # 4K Ultra HD
             maxrate = "20M"
             bufsize = "40M"
-        elif height >= 1440 or width >= 1440:    # 2K QHD
+            level_val = "5.2"
+            crf_val = "18"
+        elif max_dim >= 1440:     # 2K Quad HD
             maxrate = "12M"
             bufsize = "24M"
-        else:                                    # 1080p 60fps
-            maxrate = "7.5M"
-            bufsize = "15M"
+            level_val = "5.1"
+            crf_val = "19"
+        elif max_dim >= 1080:     # 1080p Full HD
+            maxrate = "6M"
+            bufsize = "12M"
+            level_val = "4.2"
+            crf_val = "20"
+        elif max_dim >= 720:      # 720p HD
+            maxrate = "3.5M"
+            bufsize = "7M"
+            level_val = "3.2"
+            crf_val = "21"
+        else:                     # 360p / 480p / SD
+            maxrate = "1.8M"
+            bufsize = "3.6M"
+            level_val = "3.1"
+            crf_val = "22"
     except Exception:
         pass
 
-    # 2. أمر FFmpeg المتقدم للدقات العالية والفريمات الفائقة
+    # معالجة الفيديو بحقوق ALSHKA IQ ونظام Optimized الكامل
     cmd = [
         "ffmpeg", "-y",
         "-threads", "2",
@@ -110,19 +121,20 @@ async def tiktok_patcher(
         "-c:v", "libx264",
         "-preset", "veryfast",
         "-profile:v", "high",
-        "-level:v", "5.2",                       # المستوى القياسي لدعم 1080p60/120 و 4K
-        "-crf", "18",                            # جودة نقية جداً
+        "-level:v", level_val,
+        "-crf", crf_val,
         "-maxrate", maxrate,
         "-bufsize", bufsize,
         "-pix_fmt", "yuv420p",
         "-colorspace", "bt709",
         "-color_primaries", "bt709",
         "-color_trc", "bt709",
+        "-color_range", "tv",
         "-c:a", "aac",
-        "-b:a", "192k",
+        "-b:a", "128k",
         "-ar", "44100",
         "-brand", "mp41",
-        # حقوق ALSHKA IQ الرسمية
+        # حقوق ALSHKA IQ الكاملة
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
@@ -147,10 +159,12 @@ async def tiktok_patcher(
         media_type="video/mp4",
         filename=f"ALSHKA_IQ_Patched_{file.filename}"
     )
-    # =====================================================================
-# 2. ميزة رفع الفريمات فقط (Smooth Motion FPS)
+
+
 # =====================================================================
-@app.post("/fps-only", tags=["Performance"], summary="رفع الفريمات بسلاسة واستقرار تام")
+# 2. ميزة رفع الفريمات فقط (Smooth High FPS)
+# =====================================================================
+@app.post("/fps-only", tags=["Enhancement Tools"], summary="2. رفع الفريمات بحركة ناعمة ومستقرة (60 / 90 / 120 FPS)")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -164,25 +178,24 @@ async def increase_fps_only(
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
     output_path = os.path.join(OUTPUT_DIR, f"{task_id}_fps.mp4")
 
-    # حفظ الفيديو
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     cmd = [
         "ffmpeg", "-y",
-        "-fflags", "+genpts",            # إعادة توليد التوقيت الزمني للإطارات لمنع التعليق
-        "-threads", "1",                 # خيط واحد لتفادي نفاد ذاكرة السيرفر فوراً
+        "-fflags", "+genpts",
+        "-threads", "1",
         "-i", input_path,
         "-filter:v", f"fps={target_fps}",
         "-map", "0:v:0",
-        "-map", "0:a?",                  # أخذ الصوت إن وُجد
+        "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", "ultrafast",
-        "-crf", "22",
-        "-maxrate", "5M",
-        "-bufsize", "10M",
+        "-crf", "21",
+        "-maxrate", "6M",
+        "-bufsize", "12M",
         "-pix_fmt", "yuv420p",
-        "-c:a", "copy",                  # نسخ الصوت كما هو لتفادي خطأ معالج الصوت
+        "-c:a", "copy",
         "-movflags", "+faststart",
         output_path
     ]
@@ -192,7 +205,7 @@ async def increase_fps_only(
     except subprocess.CalledProcessError as e:
         cleanup_files(input_path, output_path)
         err = e.stderr.decode("utf-8", errors="ignore")
-        last_lines = "\n".join(err.strip().splitlines()[-5:])
+        last_lines = "\n".join(err.strip().splitlines()[-4:])
         raise HTTPException(status_code=500, detail=f"فشلت معالجة الفريمات: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
@@ -203,10 +216,11 @@ async def increase_fps_only(
         filename=f"Smooth_{target_fps}fps_{file.filename}"
     )
 
+
 # =====================================================================
-# 3. ميزة رفع الجودة والدقة فقط (Upscale Up to 4K)
+# 3. ميزة رفع الجودة والدقة فقط (Upscale up to 4K)
 # =====================================================================
-@app.post("/upscale-only", tags=["Performance"], summary="3. رفع الجودة والدقة حتى 4K (بدون تغيير الفريمات)")
+@app.post("/upscale-only", tags=["Enhancement Tools"], summary="3. رفع الجودة والدقة حتى 4K (بدون تغيير الفريمات)")
 async def upscale_resolution_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -234,21 +248,28 @@ async def upscale_resolution_only(
         scale_filter = f"scale=-2:{target_height}:flags=bicubic"
         preset_val = "ultrafast"
         thread_val = "1"
+        maxrate_val = "25M"
     else:
-        scale_filter = f"scale=-2:{target_height}:flags=lanczos,unsharp=5:5:0.6:5:5:0.0"
-        preset_val = "fast"
+        scale_filter = f"scale=-2:{target_height}:flags=lanczos,unsharp=3:3:0.5:3:3:0.0"
+        preset_val = "veryfast"
         thread_val = "2"
+        maxrate_val = "16M"
 
     cmd = [
         "ffmpeg", "-y",
         "-threads", thread_val,
         "-i", input_path,
         "-vf", scale_filter,
+        "-map", "0:v:0",
+        "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", preset_val,
         "-crf", "18",
+        "-maxrate", maxrate_val,
+        "-bufsize", "30M",
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
+        "-movflags", "+faststart",
         output_path
     ]
 
@@ -258,7 +279,7 @@ async def upscale_resolution_only(
         cleanup_files(input_path, output_path)
         err = e.stderr.decode("utf-8", errors="ignore")
         last_lines = "\n".join(err.strip().splitlines()[-4:])
-        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
+        raise HTTPException(status_code=500, detail=f"فشلت معالجة الجودة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
@@ -268,10 +289,11 @@ async def upscale_resolution_only(
         filename=f"HD_{target_height}p_{file.filename}"
     )
 
+
 # =====================================================================
-# 4. الميزة الشاملة (رفع الدقة + رفع الفريمات معاً)
+# 4. المعالجة المزدوجة الشاملة (رفع الدقة + الفريمات معاً)
 # =====================================================================
-@app.post("/all-in-one-combo", tags=["Combo Tools"], summary="4. دمج شامل: رفع الدقة حتى 4K + رفع الفريمات مع حركة سلسة")
+@app.post("/all-in-one-combo", tags=["Combo Tools"], summary="4. دمج شامل: رفع الدقة حتى 4K + رفع الفريمات بسلاسة")
 async def combo_enhance(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -298,24 +320,31 @@ async def combo_enhance(
         shutil.copyfileobj(file.file, buffer)
 
     if target_height >= 2160:
-        vf_filter = f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100,scale=-2:{target_height}:flags=bicubic"
+        vf_filter = f"fps={target_fps},scale=-2:{target_height}:flags=bicubic"
         preset_val = "ultrafast"
         thread_val = "1"
+        maxrate_val = "25M"
     else:
-        vf_filter = f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100,scale=-2:{target_height}:flags=lanczos,unsharp=5:5:0.6:5:5:0.0"
-        preset_val = "fast"
+        vf_filter = f"fps={target_fps},scale=-2:{target_height}:flags=lanczos,unsharp=3:3:0.5:3:3:0.0"
+        preset_val = "veryfast"
         thread_val = "2"
+        maxrate_val = "16M"
 
     cmd = [
         "ffmpeg", "-y",
         "-threads", thread_val,
         "-i", input_path,
         "-vf", vf_filter,
+        "-map", "0:v:0",
+        "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", preset_val,
         "-crf", "18",
+        "-maxrate", maxrate_val,
+        "-bufsize", "30M",
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
+        "-movflags", "+faststart",
         output_path
     ]
 
