@@ -71,7 +71,6 @@ async def tiktok_patcher(
         "-b:a", "128k",
         "-movflags", "+faststart",
         output_path
-    ]   output_path
     ]
 
     try:
