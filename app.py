@@ -86,7 +86,7 @@ async def enhance_ai_video(
             "-c:a", "copy",
             output_video
         ], check=True)
-[28/08/2026 04:01 ص] ALI THAER: except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError as e:
         cleanup_directory(task_dir)
         raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {e.stderr if hasattr(e, 'stderr') else str(e)}")
 
