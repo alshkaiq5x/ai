@@ -43,7 +43,10 @@ def cleanup_files(*paths):
 # =====================================================================
 # 1. TikTok Instant Patcher (Forces Optimized Engine & Exact Size)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Instant Patcher (Forces Optimized Engine)")
+# =====================================================================
+# TikTok Instant Patcher - 100% VoidAEP / RTX Exact Binary Clone
+# =====================================================================
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (Exact Clone)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -55,9 +58,11 @@ async def tiktok_patcher(
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
     output_path = os.path.join(OUTPUT_DIR, f"{task_id}_opt.mp4")
 
+    # حفظ الملف المرفوع
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # 1. فحص كوديك الفيديو
     probe_cmd = [
         "ffprobe", "-v", "quiet",
         "-print_format", "json",
@@ -66,25 +71,23 @@ async def tiktok_patcher(
     ]
 
     codec_name = "h264"
-    has_audio = False
     try:
         probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         probe_data = json.loads(probe_res.stdout)
-        streams = probe_data.get('streams', [])
-        video_stream = next((s for s in streams if s.get('codec_type') == 'video'), {})
+        video_stream = next((s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video'), {})
         codec_name = video_stream.get('codec_name', 'h264').lower()
-        has_audio = any(s.get('codec_type') == 'audio' for s in streams)
     except Exception:
         pass
 
-    # 1. نسخ الفيديو دون إعادة تشفير + ترقيع الترويسة
+    # 2. نسخ مباشر لجميع المسارات مع مطابقة البصمة الدقيقة
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
-        "-map", "0:v:0",
-        "-c:v", "copy"
+        "-map", "0",
+        "-c", "copy"
     ]
 
+    # فلتر الترويسة اللحظي
     if "hevc" in codec_name or "h265" in codec_name:
         cmd.extend([
             "-bsf:v", "hevc_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1"
@@ -94,24 +97,15 @@ async def tiktok_patcher(
             "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1"
         ])
 
-    # 2. تحويل الصوت حصراً إلى AAC لتجاوز فحص تيك توك الإجباري
-    if has_audio:
-        cmd.extend([
-            "-map", "0:a:0",
-            "-c:a", "aac",
-            "-b:a", "128k",
-            "-ar", "44100",
-            "-ac", "2"
-        ])
-
-    # 3. تثبيت معايير التوافق الكاملة
+    # مطابقة الحاوية isomiso2avc1mp41 وتثبيت الـ Handlers
     cmd.extend([
-        "-brand", "mp41",
+        "-f", "mp4",
+        "-brand", "isom",
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
-        "-metadata:s:v:0", "handler_name=ALSHKA Video Engine",
-        "-metadata:s:a:0", "handler_name=ALSHKA Audio Engine",
+        "-metadata:s:v:0", "handler_name=VideoHandler",
+        "-metadata:s:a:0", "handler_name=SoundHandler",
         "-movflags", "+faststart",
         output_path
     ])
@@ -131,7 +125,6 @@ async def tiktok_patcher(
         media_type="video/mp4",
         filename=f"ALSHKA_IQ_Patched_{file.filename}"
     )
-
 
 # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth High FPS)
