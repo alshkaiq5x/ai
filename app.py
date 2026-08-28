@@ -41,7 +41,7 @@ def cleanup_files(*paths):
 # =====================================================================
 # 1. TikTok Optimized Patcher (3 Streams - HEVC + Double Audio)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Optimized Patcher (ALSHKA IQ - RTX Architecture)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (RTX Method - Exact Size)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -56,57 +56,66 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # التحقق من وجود مسار صوتي
+    probe_cmd = [
+        "ffprobe", "-v", "quiet",
+        "-print_format", "json",
+        "-show_streams",
+        input_path
+    ]
+    
+    has_audio = False
+    try:
+        probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        probe_data = json.loads(probe_res.stdout)
+        streams = probe_data.get('streams', [])
+        has_audio = any(s.get('codec_type') == 'audio' for s in streams)
+    except Exception:
+        pass
+
+    # أمر الترقيع اللحظي بدون إعادة تشفير (يحافظ على الحجم والجودة الأصلية بنسبة 100%)
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
-        "-map", "0:a:0?",
-        "-map", "0:a:0?",
         "-map", "0:v:0",
         "-c:v", "copy",
-        "-tag:v", "hvc1",
-        "-c:a", "copy",
-        "-brand", "isom",
-        "-metadata", "major_brand=isom",
-        "-metadata", "minor_version=512",
-        "-metadata", "compatible_brands=isomiso2mp41",
+        "-bsf:v", "h264_metadata=video_full_range_flag=0:colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1",
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
-        "-metadata", "encoder=ALSHKA IQ Optimizer Engine v1.0",
-        "-metadata", "comment=Protected content: Optimized and patched by ALSHKA IQ",
-        "-metadata:s:a:0", "handler_name=SoundHandler",
-        "-metadata:s:a:1", "handler_name=SoundHandler",
-        "-metadata:s:v:0", "handler_name=VideoHandler",
-        "-movflags", "+faststart",
-        output_path
+        "-metadata", "comment=Patched by ALSHKA IQ",
+        "-movflags", "+faststart"
     ]
+
+    if has_audio:
+        cmd.extend([
+            "-map", "0:a:0",
+            "-c:a", "copy"
+        ])
+
+    cmd.append(output_path)
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError:
+        # مسار بديل في حال لم يكن الصوت متوافقاً مع النسخ المباشر
         fallback_cmd = [
             "ffmpeg", "-y",
             "-i", input_path,
-            "-map", "0:a:0?",
-            "-map", "0:a:0?",
             "-map", "0:v:0",
             "-c:v", "copy",
-            "-tag:v", "hvc1",
-            "-c:a", "aac",
-            "-b:a", "48k",
-            "-brand", "isom",
-            "-metadata", "major_brand=isom",
-            "-metadata", "minor_version=512",
-            "-metadata", "compatible_brands=isomiso2mp41",
             "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
             "-metadata", "artist=ALSHKA IQ",
-            "-metadata", "encoder=ALSHKA IQ Optimizer Engine v1.0",
-            "-metadata", "comment=Protected content: Optimized and patched by ALSHKA IQ",
-            "-metadata:s:a:0", "handler_name=SoundHandler",
-            "-metadata:s:a:1", "handler_name=SoundHandler",
-            "-metadata:s:v:0", "handler_name=VideoHandler",
-            "-movflags", "+faststart",
-            output_path
+            "-metadata", "comment=Patched by ALSHKA IQ",
+            "-movflags", "+faststart"
         ]
+        if has_audio:
+            fallback_cmd.extend([
+                "-map", "0:a:0",
+                "-c:a", "aac",
+                "-b:a", "128k"
+            ])
+        fallback_cmd.append(output_path)
+        
         try:
             subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         except subprocess.CalledProcessError as e:
@@ -120,9 +129,8 @@ async def tiktok_patcher(
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"alshka-optimized-{task_id[:4]}.mp4"
+        filename=f"ALSHKA_IQ_Patched_{file.filename}"
     )
-
 
 # =====================================================================
 # 2. أداة رفع الفريمات بسلاسة (Smooth High FPS)
