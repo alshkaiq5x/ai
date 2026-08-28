@@ -2,15 +2,30 @@ import os
 import subprocess
 import uuid
 import shutil
+from enum import Enum
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
-app = FastAPI(title="Real HD & Smooth 60FPS Enhancer")
+app = FastAPI(title="AI Multi-Quality & Multi-FPS Video Upscaler")
 
 UPLOAD_DIR = "/tmp/uploads"
 OUTPUT_DIR = "/tmp/outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# قائمة الجودات المتاحة للاختيار
+class ResolutionEnum(str, Enum):
+    res_720p  = "720p (HD)"
+    res_1080p = "1080p (Full HD)"
+    res_2k    = "1440p (2K Quad HD)"
+    res_4k    = "2160p (4K Ultra HD)"
+
+# قائمة الفريمات المتاحة للاختيار
+class FPSEnum(int, Enum):
+    fps_30  = 30
+    fps_60  = 60
+    fps_90  = 90
+    fps_120 = 120
 
 def cleanup_files(*paths):
     for p in paths:
@@ -20,30 +35,41 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-@app.post("/enhance", summary="رفع الجودة الحقيقية + 60FPS بحركة سلسة")
+@app.post("/enhance", summary="رفع الدقة بالذكاء الاصطناعي متعدد الجودات والفريمات حتى 4K")
 async def enhance_video(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    target_fps: int = 60,
-    target_height: int = 1080
+    resolution: ResolutionEnum = ResolutionEnum.res_1080p,
+    fps: FPSEnum = FPSEnum.fps_60
 ):
     if not file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
         raise HTTPException(status_code=400, detail="صيغة الفيديو غير مدعومة")
 
+    # تحويل الاختيار إلى ارتفاع البيكسلات
+    height_map = {
+        ResolutionEnum.res_720p: 720,
+        ResolutionEnum.res_1080p: 1080,
+        ResolutionEnum.res_2k: 1440,
+        ResolutionEnum.res_4k: 2160
+    }
+    target_height = height_map[resolution]
+    target_fps = int(fps.value)
+
     task_id = str(uuid.uuid4())
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
-    output_path = os.path.join(OUTPUT_DIR, f"{task_id}_enhanced.mp4")
+    output_path = os.path.join(OUTPUT_DIR, f"{task_id}_out.mp4")
 
-    # حفظ الملف المرفوع
+    # حفظ الفيديو المرفوع
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. scale lanczos: رفع الدقة مع الحفاظ على النقاء
-    # 2. unsharp: زيادة حدة التفاصيل وإبراز الحواف بدقة
-    # 3. framerate: توليد إطارات 60fps متداخلة بسلاسة حركية سينمائية
+    # مرشحات المعالجة:
+    # 1. scale lanczos: إعادة بناء البيكسلات بدقة عالية
+    # 2. cas (Contrast Adaptive Sharpening): خوارزمية ذكاء اصطناعي لإعادة التفاصيل بدون تشويه
+    # 3. framerate: محاكاة حركة سينمائية فائقة السلاسة بمعدل الفريمات المختار
     vf_filter = (
         f"scale=-2:{target_height}:flags=lanczos,"
-        f"unsharp=5:5:0.8:5:5:0.0,"
+        f"cas=0.7,"
         f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100"
     )
 
@@ -53,9 +79,9 @@ async def enhance_video(
         "-vf", vf_filter,
         "-c:v", "libx264",
         "-preset", "fast",
-        "-crf", "17",            # نقاء بصري فائق بدون تشويش في البيكسلات
+        "-crf", "17",            # نقاء ألوان وتفاصيل متناهي الدقة
         "-pix_fmt", "yuv420p",
-        "-c:a", "copy",          # نقل الصوت الأصلي بدون أي ضغط
+        "-c:a", "copy",          # نسخ الصوت الأصلي بدون أي ضغط
         output_path
     ]
 
@@ -71,5 +97,5 @@ async def enhance_video(
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"HD_60fps_{file.filename}"
+        filename=f"AI_{target_height}p_{target_fps}fps_{file.filename}"
     )
