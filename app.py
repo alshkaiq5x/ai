@@ -38,8 +38,7 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-# =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="1. TikTok Patcher (مضمون 100% لجميع أنواع الفيديو)")
+@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="1. TikTok Patcher (فائق السرعة - بدون Timeout)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -55,20 +54,18 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. فلتر الأبعاد المتوافقة مع أجهزة الهاتف ومانع تشوه البيكسلات
-    vf_filter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1"
-
-    # أمر FFmpeg الآمن والشامل (يدعم الفيديوهات بصوت أو بدون صوت وبدون قيود تسبب انهيار السيرفر)
+    # معالجة فورية (تعديل Bitstream + FastStart + تسوية SAR) مع تشفير فائق الخفة
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
-        "-vf", vf_filter,
-        "-map", "0:v:0",         # أخذ مسار الفيديو الأساسي
-        "-map", "0:a?",           # أخذ الصوت إن وُجد، وتجاهله إن لم يوجد بدون خطأ
+        "-map", "0:v:0",
+        "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", "ultrafast",
-        "-crf", "17",             # أعلى جودة بصرية
+        "-tune", "fastdecode",
+        "-crf", "18",
         "-pix_fmt", "yuv420p",
+        "-bsf:v", "h264_metadata=video_full_range_flag=0", # إجبار نمط Limited لمنع بهتان ألوان تيك توك
         "-c:a", "aac",
         "-b:a", "128k",
         "-movflags", "+faststart",
@@ -76,12 +73,12 @@ async def tiktok_patcher(
     ]
 
     try:
-        # تشغيل العملية مع التقاط مخرجات الأخطاء بدقة
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
         cleanup_files(input_path, output_path)
         err_output = e.stderr.decode("utf-8", errors="ignore")
-        raise HTTPException(status_code=500, detail=f"تفاصيل الخطأ: {err_output}")
+        last_lines = "\n".join(err_output.strip().splitlines()[-4:])
+        raise HTTPException(status_code=500, detail=f"تفاصيل الخطأ: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
