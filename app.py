@@ -39,9 +39,9 @@ def cleanup_files(*paths):
                 pass
 
 # =====================================================================
-# 1. ميزة TikTok Patcher (منع ضغط تيك توك وحفظ جودة وألوان الفيديو الأصلية)
+# 1. ميزة TikTok Patcher (منع ضغط تيك توك وحفظ جودة الفيديو بأمان تام)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="1. TikTok Patcher (تخطي ضغط تيك توك بدون تغيير الأبعاد)")
+@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="1. TikTok Patcher (تخطي ضغط تيك توك بأمان تام)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -53,25 +53,12 @@ async def tiktok_patcher(
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
     output_path = os.path.join(OUTPUT_DIR, f"{task_id}_patched.mp4")
 
+    # حفظ الفيديو المرفوع
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    try:
-        probe_cmd = [
-            "ffprobe", "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=r_frame_rate",
-            "-of", "default=noprint_wrappers=1:nokey=1",
-            input_path
-        ]
-        probe_out = subprocess.check_output(probe_cmd).decode().splitlines()
-        fps_eval = eval(probe_out[0]) if len(probe_out) > 0 else 60
-        target_gop = int(round(fps_eval))
-    except Exception:
-        target_gop = 60
-
-    # فلتر الباتشر: ضبط الأبعاد للزوجية + حدة لتعويض الضغط + تثبيت SAR
-    vf_filter = "scale=trunc(iw/2)*2:trunc(ih/2)*2:flags=lanczos,setsar=1,unsharp=3:3:0.5:3:3:0.0"
+    # فلتر الباتشر الآمن: التأكد من الأبعاد الزوجية وتثبيت SAR وإبراز تفاصيل خفيفة لتعويض الضغط
+    vf_filter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1,unsharp=3:3:0.4:3:3:0.0"
 
     cmd = [
         "ffmpeg", "-y",
@@ -81,22 +68,17 @@ async def tiktok_patcher(
         "-c:v", "libx264",
         "-profile:v", "high",
         "-level:v", "4.2",
-        "-preset", "medium",
-        "-crf", "16",
-        "-maxrate", "14M",
-        "-bufsize", "14M",
-        "-g", str(target_gop),
-        "-keyint_min", str(target_gop),
-        "-sc_threshold", "0",
-        "-colorspace", "bt709",
-        "-color_primaries", "bt709",
-        "-color_trc", "bt709",
-        "-color_range", "tv",
+        "-preset", "veryfast",           # سرعة واستقرار لمنع الـ Timeout
+        "-crf", "17",
+        "-maxrate", "12M",               # سقف بيتريت مثالي لخوادم تيك توك
+        "-bufsize", "24M",
+        "-g", "60",                      # تثبيت keyframe منتظم
+        "-keyint_min", "60",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "192k",
         "-ar", "44100",
-        "-movflags", "+faststart",
+        "-movflags", "+faststart",       # تشغيل فوري بدون تقطيع
         output_path
     ]
 
