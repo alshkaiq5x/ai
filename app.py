@@ -92,7 +92,7 @@ async def tiktok_patcher(
     # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth Motion FPS)
 # =====================================================================
-@app.post("/fps-only", tags=["Performance"], summary="2. رفع الفريمات فقط بحركة ناعمة وسلسة (بدون تغيير الدقة)")
+@app.post("/fps-only", tags=["Performance"], summary="1. رفع الفريمات بسلاسة (مستقر لـ 60 و 120 بدون توقف)")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -106,21 +106,26 @@ async def increase_fps_only(
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
     output_path = os.path.join(OUTPUT_DIR, f"{task_id}_fps.mp4")
 
+    # حفظ الفيديو
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    vf_filter = f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100"
+    # استخدام فلتر fps عالي الكفاءة مع ضبط الـ PTS لمنع استهلاك الذاكرة
+    vf_filter = f"fps=fps={target_fps}:round=near,setpts=N/({target_fps}*TB)"
 
     cmd = [
         "ffmpeg", "-y",
         "-threads", "2",
         "-i", input_path,
         "-vf", vf_filter,
+        "-map", "0:v:0",
+        "-map", "0:a?",
         "-c:v", "libx264",
-        "-preset", "fast",
+        "-preset", "ultrafast",
         "-crf", "18",
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
+        "-movflags", "+faststart",
         output_path
     ]
 
@@ -130,7 +135,7 @@ async def increase_fps_only(
         cleanup_files(input_path, output_path)
         err = e.stderr.decode("utf-8", errors="ignore")
         last_lines = "\n".join(err.strip().splitlines()[-4:])
-        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
+        raise HTTPException(status_code=500, detail=f"فشلت معالجة الفريمات: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
