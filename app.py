@@ -9,11 +9,10 @@ from fastapi.responses import FileResponse
 
 app = FastAPI(
     title="ALSHKA IQ - Universal Video Processing & TikTok Optimizer",
-    description="محرك معالجة فيديو متكامل يدعم جميع الجودات من 360p إلى 4K 120fps مع تخطي ضغط تيك توك والحفاظ على الألوان والحجم.",
-    version="6.0.0"
+    description="محرك معالجة فيديو متكامل يدعم جميع الجودات وتخطي ضغط تيك توك بنمط Optimized مع حفظ الحقوق.",
+    version="7.0.0"
 )
 
-# مسارات التخزين المؤقت
 UPLOAD_DIR = "/tmp/uploads"
 OUTPUT_DIR = "/tmp/outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -31,7 +30,6 @@ class FPSEnum(int, Enum):
     fps_120 = 120
 
 def cleanup_files(*paths):
-    """تنظيف الملفات المؤقتة بعد انتهاء التحميل."""
     for p in paths:
         if os.path.exists(p):
             try:
@@ -39,31 +37,31 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
+
 # =====================================================================
-# TikTok Optimized Patcher - ALSHKA IQ Ultra Engine
+# 1. TikTok Optimized Patcher (3 Streams - HEVC + Double Audio)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="RTX / VoidAEP Exact 3-Streams Clone")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Optimized Patcher (ALSHKA IQ - RTX Architecture)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
 ):
     if not file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
-        raise HTTPException(status_code=400, detail="صيغة الفيديو غير مدعومة")[cite: 3]
+        raise HTTPException(status_code=400, detail="صيغة الفيديو غير مدعومة")
 
-    task_id = str(uuid.uuid4())[cite: 3]
-    input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")[cite: 3]
-    output_path = os.path.join(OUTPUT_DIR, f"{task_id}_opt.mp4")[cite: 3]
+    task_id = str(uuid.uuid4())
+    input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
+    output_path = os.path.join(OUTPUT_DIR, f"{task_id}_opt.mp4")
 
-    with open(input_path, "wb") as buffer:[cite: 3]
-        shutil.copyfileobj(file.file, buffer)[cite: 3]
+    with open(input_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
 
-    # توليد 3 مسارات مطابقة لملف rtx-optimized: مسارا صوت + مسار فيديو
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
-        "-map", "0:a:0?",                 # المسار الأول: صوت SoundHandler
-        "-map", "0:a:0?",                 # المسار الثاني: صوت مكرر SoundHandler
-        "-map", "0:v:0",                  # المسار الثالث: فيديو VideoHandler
+        "-map", "0:a:0?",
+        "-map", "0:a:0?",
+        "-map", "0:v:0",
         "-c:v", "copy",
         "-tag:v", "hvc1",
         "-c:a", "copy",
@@ -83,9 +81,8 @@ async def tiktok_patcher(
     ]
 
     try:
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)[cite: 3]
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError:
-        # مسار بديل في حال احتاج الصوت لتحويل
         fallback_cmd = [
             "ffmpeg", "-y",
             "-i", input_path,
@@ -111,24 +108,26 @@ async def tiktok_patcher(
             output_path
         ]
         try:
-            subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)[cite: 3]
+            subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
         except subprocess.CalledProcessError as e:
-            cleanup_files(input_path, output_path)[cite: 3]
-            err = e.stderr.decode("utf-8", errors="ignore")[cite: 3]
-            last_lines = "\n".join(err.strip().splitlines()[-4:])[cite: 3]
-            raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")[cite: 3]
+            cleanup_files(input_path, output_path)
+            err = e.stderr.decode("utf-8", errors="ignore")
+            last_lines = "\n".join(err.strip().splitlines()[-4:])
+            raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
 
-    background_tasks.add_task(cleanup_files, input_path, output_path)[cite: 3]
+    background_tasks.add_task(cleanup_files, input_path, output_path)
 
-    return FileResponse([cite: 3]
-        path=output_path,[cite: 3]
-        media_type="video/mp4",[cite: 3]
-        filename=f"alshka-optimized-{task_id[:4]}.mp4"[cite: 3]
+    return FileResponse(
+        path=output_path,
+        media_type="video/mp4",
+        filename=f"alshka-optimized-{task_id[:4]}.mp4"
     )
+
+
 # =====================================================================
-# 2. ميزة رفع الفريمات فقط (Smooth High FPS)
+# 2. أداة رفع الفريمات بسلاسة (Smooth High FPS)
 # =====================================================================
-@app.post("/fps-only", tags=["Enhancement Tools"], summary="2. رفع الفريمات بحركة ناعمة ومستقرة (60 / 90 / 120 FPS)")
+@app.post("/fps-only", tags=["Enhancement Tools"], summary="2. رفع الفريمات بحركة ناعمة (60 / 90 / 120 FPS)")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -182,9 +181,9 @@ async def increase_fps_only(
 
 
 # =====================================================================
-# 3. ميزة رفع الجودة والدقة فقط (Upscale up to 4K)
+# 3. أداة رفع الجودة والدقة (Upscale up to 4K)
 # =====================================================================
-@app.post("/upscale-only", tags=["Enhancement Tools"], summary="3. رفع الجودة والدقة حتى 4K (بدون تغيير الفريمات)")
+@app.post("/upscale-only", tags=["Enhancement Tools"], summary="3. رفع الجودة والدقة حتى 4K")
 async def upscale_resolution_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -255,9 +254,9 @@ async def upscale_resolution_only(
 
 
 # =====================================================================
-# 4. المعالجة المزدوجة الشاملة (رفع الدقة + الفريمات معاً)
+# 4. المعالجة المزدوجة (رفع الدقة + الفريمات معاً)
 # =====================================================================
-@app.post("/all-in-one-combo", tags=["Combo Tools"], summary="4. دمج شامل: رفع الدقة حتى 4K + رفع الفريمات بسلاسة")
+@app.post("/all-in-one-combo", tags=["Combo Tools"], summary="4. دمج شامل: رفع الدقة حتى 4K + رفع الفريمات")
 async def combo_enhance(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
