@@ -6,7 +6,7 @@ from enum import Enum
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
-app = FastAPI(title="AI Multi-Resolution, Multi-FPS & Motion Blur Enhancer")
+app = FastAPI(title="Crystal Clear Multi-Quality & Smooth FPS Enhancer")
 
 UPLOAD_DIR = "/tmp/uploads"
 OUTPUT_DIR = "/tmp/outputs"
@@ -33,14 +33,12 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-@app.post("/enhance", summary="رفع الدقة حتى 4K + فريمات حتى 120fps + دعم Motion Blur")
+@app.post("/enhance", summary="رفع الدقة حتى 4K + فريمات سلسة بدون Blur")
 async def enhance_video(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     resolution: ResolutionEnum = ResolutionEnum.res_1080p,
-    fps: FPSEnum = FPSEnum.fps_60,
-    enable_blur: bool = True,
-    blur_amount: int = 3
+    fps: FPSEnum = FPSEnum.fps_60
 ):
     if not file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
         raise HTTPException(status_code=400, detail="صيغة الفيديو غير مدعومة")
@@ -62,30 +60,26 @@ async def enhance_video(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # الترتيب الأمثل لمنع انهيار الذاكرة:
-    # 1. تطبيق Blur على الحجم الأصلي
-    # 2. توليد الفريمات على الحجم الأصلي (خفيف جداً على الـ RAM)
-    # 3. رفع الأبعاد إلى 4K كآخر خطوة
-    filters = []
+    # المعالجة:
+    # 1. framerate: توليد حركة فائقة السلاسة بنقاء تام وبدون Blur
+    # 2. scale: رفع الدقة بدقة Lanczos الحادة
+    # 3. unsharp: تحسين وضوح الحواف والبيكسلات
+    vf_filter = (
+        f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100,"
+        f"scale=-2:{target_height}:flags=lanczos,"
+        f"unsharp=5:5:0.7:5:5:0.0"
+    )
 
-    if enable_blur and blur_amount > 1:
-        weights = " ".join(["1"] * blur_amount)
-        filters.append(f"tmix=frames={blur_amount}:weights='{weights}'")
-
-    filters.append(f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100")
-    filters.append(f"scale=-2:{target_height}:flags=bilinear")
-    filters.append("unsharp=5:5:0.6:5:5:0.0")
-
-    vf_filter = ",".join(filters)
+    preset_val = "ultrafast" if target_height >= 2160 else "fast"
 
     cmd = [
         "ffmpeg", "-y",
-        "-threads", "2",           # تقييد الخيوط لتجنب استهلاك RAM مفرط في 4K
+        "-threads", "2",
         "-i", input_path,
         "-vf", vf_filter,
         "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-crf", "20",
+        "-preset", preset_val,
+        "-crf", "18",
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
         output_path
@@ -96,7 +90,7 @@ async def enhance_video(
     except subprocess.CalledProcessError as e:
         cleanup_files(input_path, output_path)
         err = e.stderr.decode("utf-8", errors="ignore")
-        last_lines = "\n".join(err.strip().splitlines()[-5:])
+        last_lines = "\n".join(err.strip().splitlines()[-4:])
         raise HTTPException(status_code=500, detail=f"خطأ المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
@@ -104,5 +98,5 @@ async def enhance_video(
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"Enhanced_{target_height}p_{target_fps}fps_{file.filename}"
+        filename=f"Smooth_{target_height}p_{target_fps}fps_{file.filename}"
     )
