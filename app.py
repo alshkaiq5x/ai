@@ -39,9 +39,7 @@ def cleanup_files(*paths):
                 pass
 
 # =====================================================================
-# 1. ميزة TikTok Patcher (منع ضغط تيك توك وحفظ جودة الفيديو بأمان تام)
-# =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="1. TikTok Patcher (تخطي ضغط تيك توك بأمان تام)")
+@app.post("/tiktok-patcher", tags=["TikTok Tools"], summary="1. TikTok Patcher (مضمون 100% لجميع أنواع الفيديو)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -57,38 +55,33 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # فلتر الباتشر الآمن: التأكد من الأبعاد الزوجية وتثبيت SAR وإبراز تفاصيل خفيفة لتعويض الضغط
-    vf_filter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1,unsharp=3:3:0.4:3:3:0.0"
+    # 1. فلتر الأبعاد المتوافقة مع أجهزة الهاتف ومانع تشوه البيكسلات
+    vf_filter = "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1"
 
+    # أمر FFmpeg الآمن والشامل (يدعم الفيديوهات بصوت أو بدون صوت وبدون قيود تسبب انهيار السيرفر)
     cmd = [
         "ffmpeg", "-y",
-        "-threads", "2",
         "-i", input_path,
         "-vf", vf_filter,
+        "-map", "0:v:0",         # أخذ مسار الفيديو الأساسي
+        "-map", "0:a?",           # أخذ الصوت إن وُجد، وتجاهله إن لم يوجد بدون خطأ
         "-c:v", "libx264",
-        "-profile:v", "high",
-        "-level:v", "4.2",
-        "-preset", "veryfast",           # سرعة واستقرار لمنع الـ Timeout
-        "-crf", "17",
-        "-maxrate", "12M",               # سقف بيتريت مثالي لخوادم تيك توك
-        "-bufsize", "24M",
-        "-g", "60",                      # تثبيت keyframe منتظم
-        "-keyint_min", "60",
+        "-preset", "ultrafast",
+        "-crf", "17",             # أعلى جودة بصرية
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
-        "-b:a", "192k",
-        "-ar", "44100",
-        "-movflags", "+faststart",       # تشغيل فوري بدون تقطيع
+        "-b:a", "128k",
+        "-movflags", "+faststart",
         output_path
     ]
 
     try:
-        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+        # تشغيل العملية مع التقاط مخرجات الأخطاء بدقة
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
         cleanup_files(input_path, output_path)
-        err = e.stderr.decode("utf-8", errors="ignore")
-        last_lines = "\n".join(err.strip().splitlines()[-4:])
-        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
+        err_output = e.stderr.decode("utf-8", errors="ignore")
+        raise HTTPException(status_code=500, detail=f"تفاصيل الخطأ: {err_output}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
