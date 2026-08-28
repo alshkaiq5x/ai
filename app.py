@@ -39,7 +39,7 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Strict Optimized Patcher (Stable)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Strict Optimized Patcher (Zero Hang)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -54,14 +54,22 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # فلتر شامل ومضبوط يعالج المقاس والفريمات ومصفوفة الألوان بدون تعارض
+    vf_filter = (
+        "scale=1080:1920:force_original_aspect_ratio=decrease,"
+        "pad=1080:1920:(ow-iw)/2:(oh-ih)/2,"
+        "fps=60,"
+        "format=yuv420p"
+    )
+
     cmd = [
         "ffmpeg", "-y",
-        "-fflags", "+genpts",
+        "-fflags", "+genpts+discardcorrupt",
         "-threads", "1",
         "-i", input_path,
-        "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=60,setsar=1",
+        "-vf", vf_filter,
         "-map", "0:v:0",
-        "-map", "0:a?",
+        "-map", "0:a:0?",                 # أخذ مسار الصوت الأول فقط لمنع تضارب المسارات المتعددة
         "-c:v", "libx264",
         "-preset", "veryfast",
         "-profile:v", "high",
@@ -72,14 +80,12 @@ async def tiktok_patcher(
         "-g", "60",
         "-keyint_min", "60",
         "-sc_threshold", "0",
-        "-pix_fmt", "yuv420p",
-        "-colorspace", "bt709",
-        "-color_primaries", "bt709",
-        "-color_trc", "bt709",
-        "-color_range", "tv",
+        "-bsf:v", "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
         "-c:a", "aac",
         "-b:a", "128k",
         "-ar", "44100",
+        "-ac", "2",
+        "-af", "aresample=async=1000",    # إصلاح التزامن الزمني للصوت لمنع Deadlock
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
