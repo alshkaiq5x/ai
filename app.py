@@ -122,7 +122,8 @@ async def upscale_resolution_only(
         f"unsharp=5:5:0.8:5:5:0.0"
     )
 
-    preset_val = "ultrafast" if target_height >= 2160 else "fast"cmd = [
+    preset_val = "ultrafast" if target_height >= 2160 else "fast"
+    cmd = [
         "ffmpeg", "-y",
         "-threads", "2",
         "-i", input_path,
