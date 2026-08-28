@@ -39,8 +39,8 @@ async def enhance_video(
     file: UploadFile = File(...),
     resolution: ResolutionEnum = ResolutionEnum.res_1080p,
     fps: FPSEnum = FPSEnum.fps_60,
-    enable_blur: bool = True,       # تفعيل أو تعطيل الـ Blur
-    blur_amount: int = 3           # قوة الـ Blur (من 2 إلى 5)
+    enable_blur: bool = True,
+    blur_amount: int = 3
 ):
     if not file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
         raise HTTPException(status_code=400, detail="صيغة الفيديو غير مدعومة")
@@ -62,29 +62,30 @@ async def enhance_video(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # بناء سلسلة الفلاتر
+    # إعداد الفلاتر مع تحسين استهلاك الذاكرة لدقة 4K
     filters = [
         f"scale=-2:{target_height}:flags=lanczos",
-        "cas=0.7"
+        "unsharp=5:5:0.6:5:5:0.0"
     ]
 
-    # إضافة فلتر الموشن بلور إذا كان مفعلاً
     if enable_blur and blur_amount > 1:
         weights = " ".join(["1"] * blur_amount)
         filters.append(f"tmix=frames={blur_amount}:weights='{weights}'")
 
-    # إضافة فلتر توليد الفريمات
     filters.append(f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100")
-
     vf_filter = ",".join(filters)
+
+    # ضبط preset سريع لتفادي تجاوز الذاكرة في دقة 4K
+    preset_choice = "ultrafast" if target_height >= 2160 else "fast"
 
     cmd = [
         "ffmpeg", "-y",
+        "-threads", "0",
         "-i", input_path,
         "-vf", vf_filter,
         "-c:v", "libx264",
-        "-preset", "fast",
-        "-crf", "17",
+        "-preset", preset_choice,
+        "-crf", "18",
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
         output_path
@@ -94,8 +95,10 @@ async def enhance_video(
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
         cleanup_files(input_path, output_path)
-        err = e.stderr.decode("utf-8", errors="ignore")[:200]
-        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {err}")
+        err = e.stderr.decode("utf-8", errors="ignore")
+        # استخراج آخر أسطر لمعرفة السبب الفعلي
+        last_lines = "\n".join(err.strip().splitlines()[-4:])
+        raise HTTPException(status_code=500, detail=f"خطأ المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
