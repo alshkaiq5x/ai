@@ -223,7 +223,9 @@ async def upscale_resolution_only(
         last_lines = "\n".join(err.strip().splitlines()[-4:])
         raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
 
-    background_tasks.add_task(cleanup_files, input_path, output_path)return FileResponse(
+    background_tasks.add_task(cleanup_files, input_path, output_path)
+
+    return FileResponse(
         path=output_path,
         media_type="video/mp4",
         filename=f"HD_{target_height}p_{file.filename}"
