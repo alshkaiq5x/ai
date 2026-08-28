@@ -61,15 +61,17 @@ async def tiktok_patcher(
         "-map", "0:v:0",
         "-map", "0:a?",
         "-c:v", "libx264",
-        "-preset", "ultrafast",
-        "-tune", "fastdecode",
-        "-crf", "18",
+        "-preset", "veryfast",           # ضغط ممتاز وسرعة معالجة عالية
+        "-crf", "20",                    # توازن مثالي بين النقاء وحجم الملف
+        "-maxrate", "8M",                # سقف 8 ميغابت/ثانية (مثالي جداً لعدم تدخل تيك توك)
+        "-bufsize", "12M",
         "-pix_fmt", "yuv420p",
-        "-bsf:v", "h264_metadata=video_full_range_flag=0", # إجبار نمط Limited لمنع بهتان ألوان تيك توك
+        "-bsf:v", "h264_metadata=video_full_range_flag=0",
         "-c:a", "aac",
         "-b:a", "128k",
         "-movflags", "+faststart",
         output_path
+    ]   output_path
     ]
 
     try:
