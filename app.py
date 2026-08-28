@@ -13,14 +13,12 @@ OUTPUT_DIR = "/tmp/outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# خيارات الجودة
 class ResolutionEnum(str, Enum):
     res_720p  = "720p (HD)"
     res_1080p = "1080p (Full HD)"
     res_2k    = "1440p (2K Quad HD)"
     res_4k    = "2160p (4K Ultra HD)"
 
-# خيارات الفريمات
 class FPSEnum(int, Enum):
     fps_60  = 60
     fps_90  = 90
@@ -35,9 +33,9 @@ def cleanup_files(*paths):
                 pass
 
 # ==========================================
-# 1. خيار رفع الفريمات فقط (FPS Only)
+# 1. رفع الفريمات فقط (Smooth FPS)
 # ==========================================
-@app.post("/fps-only", summary="1. رفع الفريمات فقط بحركة سلسة (بدون تغيير الدقة)")
+@app.post("/fps-only", summary="1. رفع الفريمات فقط بحركة سلسة")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -51,11 +49,9 @@ async def increase_fps_only(
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
     output_path = os.path.join(OUTPUT_DIR, f"{task_id}_fps.mp4")
 
-    # حفظ الفيديو
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # فلتر رفع الفريمات بحركة سلسة مع الحفاظ على الأبعاد الأصلية
     vf_filter = f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100"
 
     cmd = [
@@ -89,9 +85,9 @@ async def increase_fps_only(
 
 
 # ==========================================
-# 2. خيار رفع الجودة فقط (Upscale Only)
+# 2. رفع الجودة فقط (Upscale 4K Safe)
 # ==========================================
-@app.post("/upscale-only", summary="2. رفع الجودة والدقة فقط حتى 4K (بدون تغيير الفريمات)")
+@app.post("/upscale-only", summary="2. رفع الجودة حتى 4K بأمان بدون استهلاك زائد للذاكرة")
 async def upscale_resolution_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -112,25 +108,21 @@ async def upscale_resolution_only(
     input_path = os.path.join(UPLOAD_DIR, f"{task_id}_in.mp4")
     output_path = os.path.join(OUTPUT_DIR, f"{task_id}_upscaled.mp4")
 
-    # حفظ الفيديو
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # فلتر رفع الدقة وتحسين حدة البيكسلات
-    vf_filter = (
-        f"scale=-2:{target_height}:flags=lanczos,"
-        f"unsharp=5:5:0.8:5:5:0.0"
-    )
-
-    preset_val = "ultrafast" if target_height >= 2160 else "fast"
-    cmd = [
+    # استخدام خوارزمية ذكية لا تستهلك ذاكرة RAM مفرطة
+    if target_height >= 2160:
+        scale_filter = f"scale=-2:{target_height}:flags=bicubic"
+    else:
+        scale_filter = f"scale=-2:{target_height}:flags=lanczos,unsharp=5:5:0.6:5:5:0.0"cmd = [
         "ffmpeg", "-y",
-        "-threads", "2",
+        "-threads", "1",           # خيط معالجة واحد لدقة 4K لتفادي انهيار السيرفر
         "-i", input_path,
-        "-vf", vf_filter,
+        "-vf", scale_filter,
         "-c:v", "libx264",
-        "-preset", preset_val,
-        "-crf", "17",
+        "-preset", "ultrafast",
+        "-crf", "18",
         "-pix_fmt", "yuv420p",
         "-c:a", "copy",
         output_path
