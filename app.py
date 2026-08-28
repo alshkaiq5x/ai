@@ -102,7 +102,7 @@ async def tiktok_patcher(
     # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth Motion FPS)
 # =====================================================================
-@app.post("/fps-only", tags=["Performance"], summary="رفع الفريمات بسلاسة وبحجم مضبوط")
+@app.post("/fps-only", tags=["Performance"], summary="رفع الفريمات بسلاسة واستقرار تام")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -120,22 +120,27 @@ async def increase_fps_only(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    # فلتر الفيديو الصارم والمعزول
+    vf_filter = f"fps={target_fps}"
+
     cmd = [
         "ffmpeg", "-y",
         "-threads", "2",
         "-i", input_path,
-        "-r", str(target_fps),           # ضبط الفريمات مباشرة على مستوى الإخراج بأمان
+        "-vf", vf_filter,
         "-map", "0:v:0",
         "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", "veryfast",
-        "-crf", "22",                    # حجم متوازن جداً (20-28MB)
-        "-maxrate", "5M",                # سقف لضبط الحجم
+        "-crf", "22",
+        "-maxrate", "5M",
         "-bufsize", "10M",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "128k",
+        "-af", "aresample=async=1",        # إصلاح تزامن الصوت ومنع تجميد Lavc61
         "-movflags", "+faststart",
+        "-shortest",                       # منع الـ Deadlock عند اختلاف طول مسار الصوت عن الفيديو
         output_path
     ]
 
