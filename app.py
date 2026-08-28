@@ -115,7 +115,8 @@ async def upscale_resolution_only(
     if target_height >= 2160:
         scale_filter = f"scale=-2:{target_height}:flags=bicubic"
     else:
-        scale_filter = f"scale=-2:{target_height}:flags=lanczos,unsharp=5:5:0.6:5:5:0.0"cmd = [
+        scale_filter = f"scale=-2:{target_height}:flags=lanczos,unsharp=5:5:0.6:5:5:0.0"
+    cmd = [
         "ffmpeg", "-y",
         "-threads", "1",           # خيط معالجة واحد لدقة 4K لتفادي انهيار السيرفر
         "-i", input_path,
