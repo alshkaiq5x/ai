@@ -102,7 +102,7 @@ async def tiktok_patcher(
     # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth Motion FPS)
 # =====================================================================
-@app.post("/fps-only", tags=["Performance"], summary="1. رفع الفريمات بسلاسة (مستقر لـ 60 و 120 بدون توقف)")
+@app.post("/fps-only", tags=["Performance"], summary="رفع الفريمات مع إظهار البتريت والحجم على تيك توك")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -120,7 +120,7 @@ async def increase_fps_only(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # استخدام فلتر fps عالي الكفاءة مع ضبط الـ PTS لمنع استهلاك الذاكرة
+    # 1. فلتر الفريمات مع ضبط التوقيت الزمني الصارم (CFR)
     vf_filter = f"fps=fps={target_fps}:round=near,setpts=N/({target_fps}*TB)"
 
     cmd = [
@@ -131,11 +131,21 @@ async def increase_fps_only(
         "-map", "0:v:0",
         "-map", "0:a?",
         "-c:v", "libx264",
-        "-preset", "ultrafast",
+        "-preset", "veryfast",
         "-crf", "18",
+        # تحديد سقف البتريت والـ Buffer ليتم كتابتها رسميًا في ترويسة الفيديو
+        "-maxrate", "14M",
+        "-bufsize", "28M",
+        # تثبيت الـ GOP (Keyframe كل 1 ثانية) ليتعرف تيك توك على معدل البت
+        "-g", str(target_fps),
+        "-keyint_min", str(target_fps),
+        "-sc_threshold", "0",
+        "-fps_mode", "cfr",             # إجبار التوقيت الثابت (Constant Frame Rate)
         "-pix_fmt", "yuv420p",
-        "-c:a", "copy",
-        "-movflags", "+faststart",
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", "44100",
+        "-movflags", "+faststart",       # نقل الترويسة للبداية لقراءة فورية للحجم والبتريت
         output_path
     ]
 
@@ -152,7 +162,7 @@ async def increase_fps_only(
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"Smooth_{target_fps}fps_{file.filename}"
+        filename=f"Smooth_{target_fps}fps_TikTokReady_{file.filename}"
     )
 
 # =====================================================================
