@@ -41,10 +41,18 @@ def cleanup_files(*paths):
 # =====================================================================
 # TikTok Optimized Patcher (تخطي ضغط تيك توك وحفظ الألوان 100% ونفس الحجم)
 # =====================================================================
+import os
+import json
+import subprocess
+import uuid
+import shutil
+from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse
+
 # =====================================================================
-# TikTok Optimized Patcher - Powered by ALSHKA IQ
+# TikTok Ultra Patcher (1080p60fps up to 4K 120fps) - ALSHKA IQ
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Optimized Patcher (ALSHKA IQ)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Patcher (1080p60fps -> 4K 120fps Ready)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -60,30 +68,61 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # معالجة الفيديو بحقوق ALSHKA IQ ونظام Optimized الكامل
+    # 1. استخراج معلومات الفيديو لتحديد الدقة والفريمات
+    probe_cmd = [
+        "ffprobe", "-v", "quiet",
+        "-print_format", "json",
+        "-show_streams",
+        input_path
+    ]
+    
+    maxrate = "8M"
+    bufsize = "16M"
+    try:
+        probe_res = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        probe_data = json.loads(probe_res.stdout)
+        video_stream = next((s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video'), {})
+        
+        height = int(video_stream.get('height', 1080))
+        width = int(video_stream.get('width', 1920))
+        
+        # ضبط البتريت بناءً على الدقة العالية (2K أو 4K)
+        if height >= 2160 or width >= 2160:      # 4K UHD
+            maxrate = "20M"
+            bufsize = "40M"
+        elif height >= 1440 or width >= 1440:    # 2K QHD
+            maxrate = "12M"
+            bufsize = "24M"
+        else:                                    # 1080p 60fps
+            maxrate = "7.5M"
+            bufsize = "15M"
+    except Exception:
+        pass
+
+    # 2. أمر FFmpeg المتقدم للدقات العالية والفريمات الفائقة
     cmd = [
         "ffmpeg", "-y",
         "-threads", "2",
         "-i", input_path,
-        "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,setsar=1",
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,setsar=1",
         "-map", "0:v:0",
         "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", "veryfast",
         "-profile:v", "high",
-        "-level:v", "4.1",
-        "-b:v", "4150k",
-        "-maxrate", "4250k",
-        "-bufsize", "8500k",
+        "-level:v", "5.2",                       # المستوى القياسي لدعم 1080p60/120 و 4K
+        "-crf", "18",                            # جودة نقية جداً
+        "-maxrate", maxrate,
+        "-bufsize", bufsize,
         "-pix_fmt", "yuv420p",
         "-colorspace", "bt709",
         "-color_primaries", "bt709",
         "-color_trc", "bt709",
         "-c:a", "aac",
-        "-b:a", "128k",
+        "-b:a", "192k",
         "-ar", "44100",
         "-brand", "mp41",
-        # حقوق ALSHKA IQ داخل ترويسة الفيديو والمسارات (Metadata & Handlers)
+        # حقوق ALSHKA IQ الرسمية
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
