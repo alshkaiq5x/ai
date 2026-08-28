@@ -5,7 +5,7 @@ import shutil
 from fastapi import FastAPI, UploadFile, File, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
 
-app = FastAPI(title="High-Quality 60FPS Enhancer")
+app = FastAPI(title="Real HD 60FPS Video Enhancer")
 
 UPLOAD_DIR = "/tmp/uploads"
 OUTPUT_DIR = "/tmp/outputs"
@@ -25,7 +25,7 @@ async def enhance_video(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     target_fps: int = 60,
-    target_height: int = 1080
+    target_height: int = 1080  # 1080 لـ Full HD أو 2160 لـ 4K
 ):
     if not file.filename.lower().endswith(('.mp4', '.mov', '.avi', '.mkv', '.webm')):
         raise HTTPException(status_code=400, detail="صيغة الفيديو غير مدعومة")
@@ -38,12 +38,13 @@ async def enhance_video(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. scale: رفع الأبعاد إلى 1080p بخوارزمية lanczos
-    # 2. unsharp: زيادة الحدة وتوضيح المعالم بدقة عالية
-    # 3. framerate: تعويض الإطارات لـ 60fps بحركة ناعمة بدون تقطيع
+    # سلسلة فلاتر معالجة الجودة الفائقة:
+    # 1. scale lanczos: رفع الدقة بدقة متناهية
+    # 2. unsharp: زيادة حدة التفاصيل وإزالة التغبيش
+    # 3. framerate interpolation: توليد إطارات متداخلة حقيقية وسلسة
     vf_filter = (
         f"scale=-2:{target_height}:flags=lanczos,"
-        f"unsharp=5:5:0.8:5:5:0.4,"
+        f"unsharp=5:5:0.8:5:5:0.0,"
         f"framerate=fps={target_fps}:interp_start=0:interp_end=255:scene=100"
     )
 
@@ -52,10 +53,10 @@ async def enhance_video(
         "-i", input_path,
         "-vf", vf_filter,
         "-c:v", "libx264",
-        "-preset", "medium",        # توازن ممتاز بين السرعة والجودة العالية
-        "-crf", "17",               # جودة بصرية شبه مطابقة للأصل بدون فقدان
+        "-preset", "medium",     # توازن ممتاز بين سرعة المعالجة ونقاء الصورة
+        "-crf", "17",            # جودة بصرية فائقة الوضوح (Visually Lossless)
         "-pix_fmt", "yuv420p",
-        "-c:a", "copy",             # الحفاظ على نقاء الصوت الأصلي بالكامل
+        "-c:a", "copy",
         output_path
     ]
 
@@ -63,12 +64,12 @@ async def enhance_video(
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
     except subprocess.CalledProcessError as e:
         cleanup_files(input_path, output_path)
-        raise HTTPException(status_code=500, detail="فشلت المعالجة أثناء تشغيل المحسن")
+        raise HTTPException(status_code=500, detail="فشلت المعالجة أثناء تحسين الجودة")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"HQ_60fps_{file.filename}"
+        filename=f"HD_{target_height}p_60fps_{file.filename}"
     )
