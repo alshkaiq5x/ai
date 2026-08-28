@@ -39,11 +39,7 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-
-# =====================================================================
-# TikTok Strict Optimized Patcher - ALSHKA IQ (حل مشكلة Standard)
-# =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Strict Optimized Patcher")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Strict Optimized Patcher (Stable)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -58,25 +54,22 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # فلتر لضبط الأبعاد على 1080x1920 بالضبط وتثبيت الفريمات على 60fps
-    vf_filter = "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=60,setsar=1"
-
     cmd = [
         "ffmpeg", "-y",
-        "-threads", "2",
+        "-fflags", "+genpts",
+        "-threads", "1",
         "-i", input_path,
-        "-vf", vf_filter,
+        "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=60,setsar=1",
         "-map", "0:v:0",
         "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", "veryfast",
         "-profile:v", "high",
         "-level:v", "4.2",
-        "-b:v", "4200k",                 # تثبيت البتريت عند القيمة الذهبية المقبولة
-        "-minrate", "4000k",
-        "-maxrate", "4400k",
-        "-bufsize", "8400k",
-        "-g", "60",                      # Keyframe منتظم كل ثانية واحدة
+        "-crf", "19",
+        "-maxrate", "4500k",
+        "-bufsize", "9000k",
+        "-g", "60",
         "-keyint_min", "60",
         "-sc_threshold", "0",
         "-pix_fmt", "yuv420p",
@@ -87,8 +80,6 @@ async def tiktok_patcher(
         "-c:a", "aac",
         "-b:a", "128k",
         "-ar", "44100",
-        "-ac", "2",
-        # وسوم التعريف التابعة لـ ALSHKA IQ
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
