@@ -102,7 +102,7 @@ async def tiktok_patcher(
     # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth Motion FPS)
 # =====================================================================
-@app.post("/fps-only", tags=["Performance"], summary="رفع الفريمات بحجم مضبوط وخفيف (20-30MB)")
+@app.post("/fps-only", tags=["Performance"], summary="رفع الفريمات بسلاسة وبحجم مضبوط")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -120,24 +120,18 @@ async def increase_fps_only(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    vf_filter = f"fps=fps={target_fps}:round=near,setpts=N/({target_fps}*TB)"
-
     cmd = [
         "ffmpeg", "-y",
         "-threads", "2",
         "-i", input_path,
-        "-vf", vf_filter,
+        "-r", str(target_fps),           # ضبط الفريمات مباشرة على مستوى الإخراج بأمان
         "-map", "0:v:0",
         "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", "veryfast",
-        "-crf", "22",                    # قيمة ممتازة تمنع تضخم الحجم وتحافظ على وضوح الفيديو
-        "-maxrate", "4.5M",              # سقف محكم لمعدل البت للحفاظ على حجم بين 20-30MB
-        "-bufsize", "9M",
-        "-g", str(target_fps),
-        "-keyint_min", str(target_fps),
-        "-sc_threshold", "0",
-        "-fps_mode", "cfr",
+        "-crf", "22",                    # حجم متوازن جداً (20-28MB)
+        "-maxrate", "5M",                # سقف لضبط الحجم
+        "-bufsize", "10M",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
         "-b:a", "128k",
