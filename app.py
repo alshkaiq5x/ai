@@ -120,27 +120,22 @@ async def increase_fps_only(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # فلتر الفيديو الصارم والمعزول
-    vf_filter = f"fps={target_fps}"
-
     cmd = [
         "ffmpeg", "-y",
-        "-threads", "2",
+        "-fflags", "+genpts",            # إعادة توليد التوقيت الزمني للإطارات لمنع التعليق
+        "-threads", "1",                 # خيط واحد لتفادي نفاد ذاكرة السيرفر فوراً
         "-i", input_path,
-        "-vf", vf_filter,
+        "-filter:v", f"fps={target_fps}",
         "-map", "0:v:0",
-        "-map", "0:a?",
+        "-map", "0:a?",                  # أخذ الصوت إن وُجد
         "-c:v", "libx264",
-        "-preset", "veryfast",
+        "-preset", "ultrafast",
         "-crf", "22",
         "-maxrate", "5M",
         "-bufsize", "10M",
         "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-b:a", "128k",
-        "-af", "aresample=async=1",        # إصلاح تزامن الصوت ومنع تجميد Lavc61
+        "-c:a", "copy",                  # نسخ الصوت كما هو لتفادي خطأ معالج الصوت
         "-movflags", "+faststart",
-        "-shortest",                       # منع الـ Deadlock عند اختلاف طول مسار الصوت عن الفيديو
         output_path
     ]
 
@@ -149,7 +144,7 @@ async def increase_fps_only(
     except subprocess.CalledProcessError as e:
         cleanup_files(input_path, output_path)
         err = e.stderr.decode("utf-8", errors="ignore")
-        last_lines = "\n".join(err.strip().splitlines()[-4:])
+        last_lines = "\n".join(err.strip().splitlines()[-5:])
         raise HTTPException(status_code=500, detail=f"فشلت معالجة الفريمات: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
