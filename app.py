@@ -102,7 +102,7 @@ async def tiktok_patcher(
     # =====================================================================
 # 2. ميزة رفع الفريمات فقط (Smooth Motion FPS)
 # =====================================================================
-@app.post("/fps-only", tags=["Performance"], summary="رفع الفريمات مع إظهار البتريت والحجم على تيك توك")
+@app.post("/fps-only", tags=["Performance"], summary="رفع الفريمات بحجم مضبوط وخفيف (20-30MB)")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -120,7 +120,6 @@ async def increase_fps_only(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # 1. فلتر الفريمات مع ضبط التوقيت الزمني الصارم (CFR)
     vf_filter = f"fps=fps={target_fps}:round=near,setpts=N/({target_fps}*TB)"
 
     cmd = [
@@ -132,20 +131,17 @@ async def increase_fps_only(
         "-map", "0:a?",
         "-c:v", "libx264",
         "-preset", "veryfast",
-        "-crf", "18",
-        # تحديد سقف البتريت والـ Buffer ليتم كتابتها رسميًا في ترويسة الفيديو
-        "-maxrate", "14M",
-        "-bufsize", "28M",
-        # تثبيت الـ GOP (Keyframe كل 1 ثانية) ليتعرف تيك توك على معدل البت
+        "-crf", "22",                    # قيمة ممتازة تمنع تضخم الحجم وتحافظ على وضوح الفيديو
+        "-maxrate", "4.5M",              # سقف محكم لمعدل البت للحفاظ على حجم بين 20-30MB
+        "-bufsize", "9M",
         "-g", str(target_fps),
         "-keyint_min", str(target_fps),
         "-sc_threshold", "0",
-        "-fps_mode", "cfr",             # إجبار التوقيت الثابت (Constant Frame Rate)
+        "-fps_mode", "cfr",
         "-pix_fmt", "yuv420p",
         "-c:a", "aac",
-        "-b:a", "192k",
-        "-ar", "44100",
-        "-movflags", "+faststart",       # نقل الترويسة للبداية لقراءة فورية للحجم والبتريت
+        "-b:a", "128k",
+        "-movflags", "+faststart",
         output_path
     ]
 
@@ -162,7 +158,7 @@ async def increase_fps_only(
     return FileResponse(
         path=output_path,
         media_type="video/mp4",
-        filename=f"Smooth_{target_fps}fps_TikTokReady_{file.filename}"
+        filename=f"Smooth_{target_fps}fps_{file.filename}"
     )
 
 # =====================================================================
