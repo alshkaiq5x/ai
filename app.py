@@ -39,7 +39,10 @@ def cleanup_files(*paths):
             except Exception:
                 pass
 
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Fast Patcher (Zero Memory / No Crash)")
+# =====================================================================
+# TikTok Universal Optimized Patcher - Powered by ALSHKA IQ
+# =====================================================================
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Optimized Patcher (HEVC Engine - ALSHKA IQ)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -55,77 +58,46 @@ async def tiktok_patcher(
     with open(input_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # التحقق من وجود مسار صوتي بدون تشغيل أوامر ثقيلة
-    probe_cmd = [
-        "ffprobe", "-v", "quiet",
-        "-select_streams", "a",
-        "-show_entries", "stream=codec_name",
-        "-of", "csv=p=0",
-        input_path
-    ]
-    
-    has_audio = False
-    try:
-        audio_probe = subprocess.run(probe_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        has_audio = bool(audio_probe.stdout.strip())
-    except Exception:
-        has_audio = False
-
-    # حقن ترويسة Optimized الصافية بنمط البت ستريم والنسخ المباشر
+    # معالجة وحقن ترويسة HEVC المعتمدة لدى تيك توك
     cmd = [
         "ffmpeg", "-y",
+        "-threads", "2",
         "-i", input_path,
         "-map", "0:v:0",
-        "-c:v", "copy",
-        "-bsf:v", "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
+        "-map", "0:a?",
+        "-c:v", "libx265",
+        "-preset", "ultrafast",
+        "-tag:v", "hvc1",                # وسم hvc1 الإجباري لمشغلات MP4 وتيك توك
+        "-profile:v", "main",
+        "-crf", "22",
+        "-maxrate", "3000k",
+        "-bufsize", "6000k",
+        "-pix_fmt", "yuv420p",
+        "-colorspace", "bt709",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-color_range", "tv",
+        "-c:a", "aac",
+        "-b:a", "96k",
+        "-ar", "44100",
         "-brand", "mp41",
+        # حقوق ALSHKA IQ
         "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
         "-metadata", "artist=ALSHKA IQ",
         "-metadata", "comment=Patched by ALSHKA IQ",
-        "-metadata:s:v:0", "handler_name=ALSHKA Video Engine",
-        "-movflags", "+faststart"
+        "-metadata:s:v:0", "handler_name=VideoHandler",
+        "-metadata:s:a:0", "handler_name=SoundHandler",
+        "-movflags", "+faststart",
+        output_path
     ]
-
-    if has_audio:
-        cmd.extend([
-            "-map", "0:a:0",
-            "-c:a", "aac",
-            "-b:a", "128k",
-            "-metadata:s:a:0", "handler_name=ALSHKA Audio Engine"
-        ])
-
-    cmd.append(output_path)
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-    except subprocess.CalledProcessError:
-        # مسار احتياطي عام إذا كان ترميز الفيديو غير متطابق مع h264_metadata
-        fallback_cmd = [
-            "ffmpeg", "-y",
-            "-i", input_path,
-            "-map", "0:v:0",
-            "-c:v", "copy",
-            "-brand", "mp41",
-            "-metadata", "title=ALSHKA IQ MAX QUALITY + FPS",
-            "-metadata", "artist=ALSHKA IQ",
-            "-metadata", "comment=Patched by ALSHKA IQ",
-            "-movflags", "+faststart"
-        ]
-        if has_audio:
-            fallback_cmd.extend([
-                "-map", "0:a:0",
-                "-c:a", "aac",
-                "-b:a", "128k"
-            ])
-        fallback_cmd.append(output_path)
-
-        try:
-            subprocess.run(fallback_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-        except subprocess.CalledProcessError as e:
-            cleanup_files(input_path, output_path)
-            err = e.stderr.decode("utf-8", errors="ignore")
-            last_lines = "\n".join(err.strip().splitlines()[-4:])
-            raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
+    except subprocess.CalledProcessError as e:
+        cleanup_files(input_path, output_path)
+        err = e.stderr.decode("utf-8", errors="ignore")
+        last_lines = "\n".join(err.strip().splitlines()[-4:])
+        raise HTTPException(status_code=500, detail=f"فشلت المعالجة: {last_lines}")
 
     background_tasks.add_task(cleanup_files, input_path, output_path)
 
