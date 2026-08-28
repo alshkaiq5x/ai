@@ -9,10 +9,11 @@ from fastapi.responses import FileResponse
 
 app = FastAPI(
     title="ALSHKA IQ - Universal Video Processing & TikTok Optimizer",
-    description="محرك معالجة فيديو متكامل يدعم جميع الجودات وتخطي ضغط تيك توك بنمط Optimized مع حفظ الحقوق.",
-    version="7.0.0"
+    description="محرك معالجة فيديو متكامل يدعم جميع الجودات من 360p إلى 4K 120fps مع تخطي ضغط تيك توك والحفاظ على الألوان والحجم.",
+    version="6.1.0"
 )
 
+# مسارات التخزين المؤقت
 UPLOAD_DIR = "/tmp/uploads"
 OUTPUT_DIR = "/tmp/outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -30,6 +31,7 @@ class FPSEnum(int, Enum):
     fps_120 = 120
 
 def cleanup_files(*paths):
+    """تنظيف الملفات المؤقتة بعد انتهاء التحميل."""
     for p in paths:
         if os.path.exists(p):
             try:
@@ -39,9 +41,9 @@ def cleanup_files(*paths):
 
 
 # =====================================================================
-# TikTok Instant Patcher - 100% Mediabunny / RTX Exact Engine
+# 1. TikTok Instant Patcher (Forces Optimized Engine & Exact Size)
 # =====================================================================
-@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="TikTok Instant Patcher (Forces Optimized Engine)")
+@app.post("/tiktok-patcher", tags=["TikTok Optimizer"], summary="1. TikTok Instant Patcher (Forces Optimized Engine)")
 async def tiktok_patcher(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...)
@@ -75,7 +77,7 @@ async def tiktok_patcher(
     except Exception:
         pass
 
-    # 1. نسخ الفيديو دون مساس + ترقيع الترويسة
+    # 1. نسخ الفيديو دون إعادة تشفير + ترقيع الترويسة
     cmd = [
         "ffmpeg", "-y",
         "-i", input_path,
@@ -112,7 +114,7 @@ async def tiktok_patcher(
         "-metadata:s:a:0", "handler_name=ALSHKA Audio Engine",
         "-movflags", "+faststart",
         output_path
-    ]
+    ])
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
@@ -129,10 +131,12 @@ async def tiktok_patcher(
         media_type="video/mp4",
         filename=f"ALSHKA_IQ_Patched_{file.filename}"
     )
+
+
 # =====================================================================
-# 2. أداة رفع الفريمات بسلاسة (Smooth High FPS)
+# 2. ميزة رفع الفريمات فقط (Smooth High FPS)
 # =====================================================================
-@app.post("/fps-only", tags=["Enhancement Tools"], summary="2. رفع الفريمات بحركة ناعمة (60 / 90 / 120 FPS)")
+@app.post("/fps-only", tags=["Enhancement Tools"], summary="2. رفع الفريمات بحركة ناعمة ومستقرة (60 / 90 / 120 FPS)")
 async def increase_fps_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -186,9 +190,9 @@ async def increase_fps_only(
 
 
 # =====================================================================
-# 3. أداة رفع الجودة والدقة (Upscale up to 4K)
+# 3. ميزة رفع الجودة والدقة فقط (Upscale up to 4K)
 # =====================================================================
-@app.post("/upscale-only", tags=["Enhancement Tools"], summary="3. رفع الجودة والدقة حتى 4K")
+@app.post("/upscale-only", tags=["Enhancement Tools"], summary="3. رفع الجودة والدقة حتى 4K (بدون تغيير الفريمات)")
 async def upscale_resolution_only(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
@@ -259,9 +263,9 @@ async def upscale_resolution_only(
 
 
 # =====================================================================
-# 4. المعالجة المزدوجة (رفع الدقة + الفريمات معاً)
+# 4. المعالجة المزدوجة الشاملة (رفع الدقة + الفريمات معاً)
 # =====================================================================
-@app.post("/all-in-one-combo", tags=["Combo Tools"], summary="4. دمج شامل: رفع الدقة حتى 4K + رفع الفريمات")
+@app.post("/all-in-one-combo", tags=["Combo Tools"], summary="4. دمج شامل: رفع الدقة حتى 4K + رفع الفريمات بسلاسة")
 async def combo_enhance(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
