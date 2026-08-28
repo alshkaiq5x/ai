@@ -71,8 +71,7 @@ async def tiktok_patcher(
         "-b:a", "128k",
         "-movflags", "+faststart",
         output_path
-    ]   output_path
-    ]
+    ] 
 
     try:
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
